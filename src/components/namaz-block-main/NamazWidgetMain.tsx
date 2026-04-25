@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import NumberFlow from '@number-flow/react';
 import {
   StyleSheet,
   Text,
@@ -10,10 +11,8 @@ import {
   Easing,
   Pressable,
 } from 'react-native';
-import { motion, AnimatePresence } from 'motion/react';
 import { Volume2, VolumeX, MapPin } from 'lucide-react';
-import { EclipseIcon, SunIcon, SunDimIcon, SunsetIcon, MoonStarIcon } from './PrayerIcons';
-import { ThemeContext } from '../../screens/TestScreen';
+import { EclipseIcon, SunIcon, SunDimIcon, SunsetIcon, MoonStarIcon } from './PrayerIconsMain';
 
 const SC = 0.7; // 30% scale reduction base
 const s = (v: number) => v * SC;
@@ -34,7 +33,7 @@ const DEFAULT_PRAYERS: Prayer[] = [
   { id: 4, name: 'Құптан', time: '22:15', Icon: MoonStarIcon },
 ];
 
-const VIBRANT_STATUS_COLORS: Record<number, string> = {
+const STATUS_COLORS: Record<number, string> = {
   0: '#10b981', // green
   1: '#3b82f6', // blue
   2: '#ef4444', // red
@@ -42,28 +41,12 @@ const VIBRANT_STATUS_COLORS: Record<number, string> = {
   4: '#10b981', // green
 };
 
-const MONOCHROME_STATUS_COLORS: Record<number, string> = {
-  0: 'rgba(28, 28, 30, 1.00)', // Darkest (1st rank)
-  1: 'rgba(28, 28, 30, 0.75)', // Mid-dark (2nd rank)
-  2: 'rgba(28, 28, 30, 0.45)', // Mid-light (3rd rank)
-  3: 'rgba(28, 28, 30, 0.20)', // Lightest (4th rank)
-  4: 'rgba(28, 28, 30, 1.00)', // Darkest (1st rank)
-};
-
-const VIBRANT_BG_COLORS: Record<number, string> = {
+const BG_COLORS: Record<number, string> = {
   0: 'rgba(16, 185, 129, 0.1)', // green light
   1: 'rgba(59, 130, 246, 0.1)', // blue light
   2: 'rgba(239, 68, 68, 0.1)',  // red light
   3: 'rgba(28, 28, 30, 0.06)',  // black light
   4: 'rgba(16, 185, 129, 0.1)', // green light
-};
-
-const MONOCHROME_BG_COLORS: Record<number, string> = {
-  0: '#ffffff', // Best (Rank 1) - Pure White
-  1: '#f1f1f6', // Rank 2 (Blue) - Soft Gray
-  2: '#3f3f46', // Rank 3 (Red) - Deep Charcoal
-  3: '#000000', // Worst (Rank 4) - Pure Black
-  4: '#ffffff', // Best (Rank 1)
 };
 
 function ScrollTransition({ 
@@ -136,65 +119,8 @@ function ScrollTransition({
   );
 }
 
-const RollingDigit = ({ digit, height, style }: { digit: number, height: number, style: any }) => {
-  const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  
-  return (
-    <div style={{ 
-      height: height, 
-      overflow: 'hidden', 
-      display: 'inline-block',
-      position: 'relative',
-      width: '0.65em', // Fixed width for alignment
-      textAlign: 'center',
-      verticalAlign: 'bottom'
-    }}>
-      <motion.div
-        initial={false}
-        animate={{ y: -digit * height }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 400, 
-          damping: 35,
-          mass: 0.8
-        }}
-        style={{ 
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        {digits.map((num) => (
-          <div key={num} style={{ 
-            height: height, 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            ...style,
-            lineHeight: 1,
-            margin: 0,
-            padding: 0
-          }}>
-            {num}
-          </div>
-        ))}
-      </motion.div>
-    </div>
-  );
-};
-
-export default function NamazWidget() {
+export default function NamazWidgetMain() {
   const { width } = useWindowDimensions(); 
-  const { colorMode } = useContext(ThemeContext);
-
-  const statusColors = colorMode === 'monochrome' ? MONOCHROME_STATUS_COLORS : VIBRANT_STATUS_COLORS;
-  const bgColors = colorMode === 'monochrome' ? MONOCHROME_BG_COLORS : VIBRANT_BG_COLORS;
-
-  const getTextColor = (id: number) => {
-    if (colorMode !== 'monochrome') return '#1c1c1e';
-    // For Rank 4 (ID 3) and Rank 3 (ID 2) which have very dark backgrounds, use white
-    if (id === 2 || id === 3) return '#ffffff';
-    return '#1c1c1e';
-  };
   
   const [location, setLocation] = useState({ lat: 51.133333, lng: 71.433333 }); // default Astana
   const [isLocating, setIsLocating] = useState(false);
@@ -330,28 +256,12 @@ export default function NamazWidget() {
     ? '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif'
     : 'System';
 
-  const monoFontFamily = Platform.OS === 'web' 
-    ? '"Roboto Mono", monospace'
-    : 'System';
-
   const TimerDisplay = ({ seconds, style }: { seconds: number, style: any }) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const sVar = seconds % 60;
 
     const baseStyle = Array.isArray(style) ? Object.assign({}, ...style) : style;
-    const digitHeight = baseStyle.fontSize * 1.25;
-
-    const renderTwoDigits = (value: number) => {
-      const d1 = Math.floor(value / 10);
-      const d2 = value % 10;
-      return (
-        <>
-          <RollingDigit digit={d1} height={digitHeight} style={baseStyle} />
-          <RollingDigit digit={d2} height={digitHeight} style={baseStyle} />
-        </>
-      );
-    };
 
     return (
       <View style={baseStyle} pointerEvents="none">
@@ -362,14 +272,13 @@ export default function NamazWidget() {
           fontWeight: baseStyle.fontWeight,
           letterSpacing: baseStyle.letterSpacing || 'normal',
           display: 'flex',
-          alignItems: 'center',
-          lineHeight: 1
+          alignItems: 'center'
         }}>
-          {renderTwoDigits(h)}
+          <NumberFlow trend={-1} value={h} format={{ minimumIntegerDigits: 2 }} />
           <span style={{ margin: '0 4px', transform: 'translateY(-2%)' }}>:</span>
-          {renderTwoDigits(m)}
+          <NumberFlow trend={-1} value={m} format={{ minimumIntegerDigits: 2 }} />
           <span style={{ margin: '0 4px', transform: 'translateY(-2%)' }}>:</span>
-          {renderTwoDigits(sVar)}
+          <NumberFlow trend={-1} value={sVar} format={{ minimumIntegerDigits: 2 }} />
         </div>
       </View>
     );
@@ -405,14 +314,12 @@ export default function NamazWidget() {
               style={[
                 styles.topBlock, 
                 { 
-                  backgroundColor: bgColors[currentPrayer.id] || '#f1f1f6',
+                  backgroundColor: BG_COLORS[currentPrayer.id] || '#f1f1f6',
                   paddingHorizontal: topBlockPaddingX,
                   paddingBottom: topBlockPaddingY * 1.5,
                   paddingTop: topBlockPaddingY,
                   borderRadius: topBlockRadius,
-                  overflow: 'hidden',
-                  borderWidth: 0.5,
-                  borderColor: 'rgba(28, 28, 30, 0.03)'
+                  overflow: 'hidden'
                 }
               ]}
             >
@@ -421,8 +328,7 @@ export default function NamazWidget() {
                 distance={sy(40)}
                 renderItem={(prayer) => {
                   const IconCmp = prayer.Icon;
-                  const statusColor = statusColors[prayer.id] || '#f7bc2e';
-                  const txtColor = getTextColor(prayer.id);
+                  const statusColor = STATUS_COLORS[prayer.id] || '#f7bc2e';
                   return (
                     <View style={{ flex: 1 }}>
                       <View style={{ height: topBlockExtraStretch * 1.6 }} />
@@ -433,7 +339,7 @@ export default function NamazWidget() {
 
                       <View style={styles.cityDateRow}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={[styles.cityText, { color: txtColor, fontFamily, fontSize: s(22) * 1.2, transform: [{ translateY: -s(8) }] }]}>{prayer.name}</Text>
+                          <Text style={[styles.cityText, { fontFamily, fontSize: s(22) * 1.2, transform: [{ translateY: -s(8) }] }]}>{prayer.name}</Text>
                           <View style={{ width: s(8), height: s(8), borderRadius: s(4), backgroundColor: statusColor, marginLeft: s(10), transform: [{ translateY: -s(8) }] }} />
                         </View>
                       </View>
@@ -443,14 +349,14 @@ export default function NamazWidget() {
                           fontFamily, 
                           fontSize: s(24), 
                           fontWeight: '600', 
-                          color: txtColor, 
+                          color: '#1c1c1e', 
                           opacity: prayer.id === 0 ? 0.5 : 0 
                         }}>
                           Күн:
                         </Text>
                         <TimerDisplay 
                           seconds={timeLeft} 
-                          style={[styles.mainTimeText, { color: txtColor, fontSize: mainTimeFontSize, fontFamily: monoFontFamily, marginTop: s(4) }]} 
+                          style={[styles.mainTimeText, { fontSize: mainTimeFontSize, fontFamily, marginTop: s(4) }]} 
                         />
                       </View>
                     </View>
@@ -498,16 +404,7 @@ export default function NamazWidget() {
                   onPressOut={() => handlePressOut(pressScales[currentPrayer.id])}
                   style={[
                     styles.cardLight, 
-                    { 
-                      backgroundColor: bgColors[currentPrayer.id] || '#f1f1f6', 
-                      paddingHorizontal: gridInnerPaddingX, 
-                      paddingVertical: gridVerticalPadding, 
-                      borderRadius: gridRectRadius, 
-                      aspectRatio: 1.4, 
-                      overflow: 'hidden',
-                      borderWidth: 0.5,
-                      borderColor: 'rgba(28, 28, 30, 0.03)'
-                    }
+                    { backgroundColor: BG_COLORS[currentPrayer.id] || '#f1f1f6', paddingHorizontal: gridInnerPaddingX, paddingVertical: gridVerticalPadding, borderRadius: gridRectRadius, aspectRatio: 1.4, overflow: 'hidden' }
                   ]}
                 >
                   <ScrollTransition
@@ -515,20 +412,19 @@ export default function NamazWidget() {
                     distance={sy(30)}
                     renderItem={(prayer) => {
                       const IconCmp = prayer.Icon;
-                      const statusColor = statusColors[prayer.id] || "#f7bc2e";
-                      const txtColor = getTextColor(prayer.id);
+                      const statusColor = STATUS_COLORS[prayer.id] || "#f7bc2e";
                       return (
                         <View style={{ flex: 1, justifyContent: 'space-between' }}>
                           <View style={styles.cardHeader}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={[styles.cardCityLight, { color: txtColor, fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
+                              <Text style={[styles.cardCityLight, { fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
                               <View style={{ width: s(6), height: s(6), borderRadius: s(3), backgroundColor: statusColor, marginLeft: s(6), transform: [{ translateY: s(1) }] }} />
                             </View>
                             <IconCmp color="#f7bc2e" fill="#f7bc2e" size={s(32)} animated={false} />
                           </View>
                           <View style={{ flex: 1 }} />
                           <View style={styles.cardFooter}>
-                            <Text style={[styles.cardTimeLight, { color: txtColor, fontSize: smallTimeFontSize, fontFamily: monoFontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
+                            <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
                             <View style={[styles.smallSoundBtnLight, { opacity: 0 }]} pointerEvents="none">
                               <Volume2 size={s(14)} strokeWidth={2.5} />
                             </View>
@@ -548,7 +444,7 @@ export default function NamazWidget() {
                     </View>
                     <View style={{ flex: 1 }} pointerEvents="none" />
                     <View style={styles.cardFooter} pointerEvents="box-none">
-                      <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily: monoFontFamily, opacity: 0 }]} adjustsFontSizeToFit numberOfLines={1}>{currentPrayer.time}</Text>
+                      <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily, opacity: 0 }]} adjustsFontSizeToFit numberOfLines={1}>{currentPrayer.time}</Text>
                       <TouchableOpacity style={styles.smallSoundBtnLight} activeOpacity={0.8} onPress={() => toggleMute(currentPrayer.id)}>
                         {muteState[currentPrayer.id] ? (
                           <VolumeX color="#ef4444" size={s(14)} strokeWidth={2.5} />
@@ -580,16 +476,7 @@ export default function NamazWidget() {
                   onPressOut={() => handlePressOut(pressScales[currentPrayer.id])}
                   style={[
                     styles.cardLight, 
-                    { 
-                      backgroundColor: bgColors[currentPrayer.id] || '#f1f1f6', 
-                      paddingHorizontal: gridInnerPaddingX, 
-                      paddingVertical: gridVerticalPadding, 
-                      borderRadius: gridRectRadius, 
-                      aspectRatio: 1.4, 
-                      overflow: 'hidden',
-                      borderWidth: 0.5,
-                      borderColor: 'rgba(28, 28, 30, 0.03)'
-                    }
+                    { backgroundColor: BG_COLORS[currentPrayer.id] || '#f1f1f6', paddingHorizontal: gridInnerPaddingX, paddingVertical: gridVerticalPadding, borderRadius: gridRectRadius, aspectRatio: 1.4, overflow: 'hidden' }
                   ]}
                 >
                   <ScrollTransition
@@ -597,20 +484,19 @@ export default function NamazWidget() {
                     distance={sy(30)}
                     renderItem={(prayer) => {
                       const IconCmp = prayer.Icon;
-                      const statusColor = statusColors[prayer.id] || "#f7bc2e";
-                      const txtColor = getTextColor(prayer.id);
+                      const statusColor = STATUS_COLORS[prayer.id] || "#f7bc2e";
                       return (
                         <View style={{ flex: 1, justifyContent: 'space-between' }}>
                           <View style={styles.cardHeader}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={[styles.cardCityLight, { color: txtColor, fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
+                              <Text style={[styles.cardCityLight, { fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
                               <View style={{ width: s(6), height: s(6), borderRadius: s(3), backgroundColor: statusColor, marginLeft: s(6), transform: [{ translateY: s(1) }] }} />
                             </View>
                             <IconCmp color="#f7bc2e" fill="#f7bc2e" size={s(32)} animated={false} />
                           </View>
                           <View style={{ flex: 1 }} />
                           <View style={styles.cardFooter}>
-                            <Text style={[styles.cardTimeLight, { color: txtColor, fontSize: smallTimeFontSize, fontFamily: monoFontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
+                            <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
                             <View style={[styles.smallSoundBtnLight, { opacity: 0 }]} pointerEvents="none">
                               <Volume2 size={s(14)} strokeWidth={2.5} />
                             </View>
@@ -630,7 +516,7 @@ export default function NamazWidget() {
                     </View>
                     <View style={{ flex: 1 }} pointerEvents="none" />
                     <View style={styles.cardFooter} pointerEvents="box-none">
-                      <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily: monoFontFamily, opacity: 0 }]} adjustsFontSizeToFit numberOfLines={1}>{currentPrayer.time}</Text>
+                      <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily, opacity: 0 }]} adjustsFontSizeToFit numberOfLines={1}>{currentPrayer.time}</Text>
                       <TouchableOpacity style={styles.smallSoundBtnLight} activeOpacity={0.8} onPress={() => toggleMute(currentPrayer.id)}>
                         {muteState[currentPrayer.id] ? (
                           <VolumeX color="#ef4444" size={s(14)} strokeWidth={2.5} />

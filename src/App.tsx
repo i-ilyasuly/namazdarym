@@ -10,7 +10,12 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {activeTab === 'home' ? <HomeScreen /> : <TestScreen />}
+        <View style={[styles.screenContainer, activeTab !== 'home' && styles.hidden]}>
+          <HomeScreen />
+        </View>
+        <View style={[styles.screenContainer, activeTab !== 'test' && styles.hidden]}>
+          <TestScreen />
+        </View>
       </View>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </SafeAreaView>
@@ -24,5 +29,15 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  screenContainer: {
+    flex: 1,
+  },
+  hidden: {
+    position: 'absolute',
+    opacity: 0,
+    pointerEvents: 'none',
+    top: -9999,
+    left: -9999,
   },
 });
