@@ -38,9 +38,10 @@ export default function QuranStreamWidget() {
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const preloadRef = useRef<HTMLAudioElement | null>(null);
-  const translateX = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scrollOffset = useRef(0);
+  const streamLineRef = useRef<View>(null);
+  const dragStartOffsetRef = useRef(0);
   
   // Track if widths are fully loaded
   const [widthsLoaded, setWidthsLoaded] = useState(false);
@@ -50,6 +51,18 @@ export default function QuranStreamWidget() {
   useEffect(() => {
     versesRef.current = verses;
   }, [verses]);
+
+  const cumulativeWidthsRef = useRef<number[]>([]);
+  useEffect(() => {
+    if (!verses.length || !widthsLoaded) return;
+    let sum = 0;
+    const arr = new Array(verses.length).fill(0);
+    for (let i = 0; i < verses.length; i++) {
+       arr[i] = sum;
+       sum += (verseWidthsRef.current[verses[i].id] || 0);
+    }
+    cumulativeWidthsRef.current = arr;
+  }, [verseWidths, verses, widthsLoaded]);
 
   useEffect(() => {
     if (widthsLoaded) {
@@ -236,6 +249,30 @@ export default function QuranStreamWidget() {
     currentVerseIndexRef.current = currentVerseIndex;
   }, [currentVerseIndex]);
 
+  // Audio sync interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      
+      const now = performance.now();
+      const actual = audio.currentTime;
+      if (actual !== lastAudioTimeRef.current) {
+        const predicted = baseAudioTimeRef.current + (now - lastSyncTimeRef.current) / 1000;
+        const drift = Math.abs(actual - predicted);
+        
+        if (drift > 0.5) {
+          baseAudioTimeRef.current = actual;
+          lastSyncTimeRef.current = now;
+        } else if (drift > 0.02) {
+          baseAudioTimeRef.current += (actual - predicted) * 0.1;
+        }
+        lastAudioTimeRef.current = actual;
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
   // Animation Loop Update
   useEffect(() => {
     let reqId: number;
@@ -252,10 +289,9 @@ export default function QuranStreamWidget() {
       if (isDraggingRef.current) return;
       
       const now = performance.now();
-      const frameDelta = Math.min(now - lastFrameTimeRef.current, 50);
       lastFrameTimeRef.current = now;
 
-      if (!audioRef.current || !widthsLoaded || !verses.length || currentVerseIndexRef.current === undefined) return;
+      if (!audioRef.current || !widthsLoaded) return;
       
       const audio = audioRef.current;
 
@@ -263,22 +299,10 @@ export default function QuranStreamWidget() {
         audio.currentTime = seekPendingRef.current * audio.duration;
         baseAudioTimeRef.current = audio.currentTime;
         lastAudioTimeRef.current = audio.currentTime;
+        lastSyncTimeRef.current = performance.now();
         seekPendingRef.current = undefined;
       }
       
-      // 1. Calculate high-resolution visual time
-      // audio.currentTime only updates every ~250ms, so we extrapolate manually
-      const actual = audio.currentTime;
-      if (actual !== lastAudioTimeRef.current) {
-        const predicted = baseAudioTimeRef.current + (now - lastSyncTimeRef.current) / 1000;
-        const drift = Math.abs(actual - predicted);
-        if (drift > 0.05) {
-          baseAudioTimeRef.current = actual;
-          lastSyncTimeRef.current = now;
-        }
-        lastAudioTimeRef.current = actual;
-      }
-
       let visualTime = baseAudioTimeRef.current;
       if (isPlayingRef.current && !audio.paused && !audio.seeking) {
         visualTime += (now - lastSyncTimeRef.current) / 1000;
@@ -288,34 +312,33 @@ export default function QuranStreamWidget() {
         visualTime = Math.min(visualTime, audio.duration);
       }
 
-      // 2. Map visual time to scroll position
-      let baseOffset = 0;
-      for (let i = 0; i < currentVerseIndexRef.current; i++) {
-        baseOffset += (verseWidthsRef.current[verses[i].id] || 0);
-      }
-      
-      const currentVerseWidth = verseWidthsRef.current[verses[currentVerseIndexRef.current].id] || 0;
+      const baseOffset = cumulativeWidthsRef.current[currentVerseIndexRef.current] || 0;
+      const currentVerseWidth = verseWidthsRef.current[versesRef.current[currentVerseIndexRef.current]?.id] || 0;
       const progress = (audio.duration && !isNaN(audio.duration)) ? (visualTime / audio.duration) : 0;
       const effectiveProgress = seekPendingRef.current !== undefined ? seekPendingRef.current : progress;
       
       const targetX = baseOffset + (effectiveProgress * currentVerseWidth);
 
-      // 3. Apply smooth movement
-      const diff = Math.abs(targetX - smoothedXRef.current);
-      if (diff > 100 || !isPlayingRef.current) {
-        smoothedXRef.current = targetX;
-      } else {
-        const lerpFactor = 1 - Math.pow(0.001, frameDelta / 1000);
-        smoothedXRef.current += (targetX - smoothedXRef.current) * lerpFactor;
-      }
+      smoothedXRef.current = targetX;
+      scrollOffset.current = targetX;
 
-      scrollOffset.current = smoothedXRef.current;
-      translateX.setValue(smoothedXRef.current);
+      let totalWidth = 0;
+      if (versesRef.current.length > 0 && cumulativeWidthsRef.current.length > 0) {
+         totalWidth = cumulativeWidthsRef.current[versesRef.current.length - 1] + 
+                      (verseWidthsRef.current[versesRef.current[versesRef.current.length - 1].id] || 0);
+      }
+      const actualTranslate = targetX - totalWidth;
+
+      const node: any = streamLineRef.current;
+      const el: HTMLElement | undefined = node?._nativeTag ? node._nativeTag : (node as unknown as HTMLElement);
+      if (el && el.style) {
+         el.style.transform = `translate3d(${isNaN(actualTranslate) ? 0 : actualTranslate}px, 0, 0)`;
+      }
     };
     
     reqId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(reqId);
-  }, [widthsLoaded, verses]); // removed isPlaying
+  }, [widthsLoaded]);
 
   // Pan Responder for Dragging
   const panResponder = useRef(
@@ -324,16 +347,27 @@ export default function QuranStreamWidget() {
       onMoveShouldSetPanResponder: (evt, gestureState) => Math.abs(gestureState.dx) > 10,
       onPanResponderGrant: () => {
         isDraggingRef.current = true;
+        dragStartOffsetRef.current = scrollOffset.current;
         // Pause playback temporarily while dragging
         if (audioRef.current && isPlayingRef.current) {
           audioRef.current.pause();
         }
       },
       onPanResponderMove: (evt, gestureState) => {
-        // dx > 0 means dragging right. Dragging RTL text right brings 'left' text into view.
-        // We want dragging right to mean fast-forward (increasing offset).
-        const newX = scrollOffset.current + gestureState.dx;
-        translateX.setValue(newX);
+        const newTargetX = dragStartOffsetRef.current + gestureState.dx;
+        scrollOffset.current = newTargetX;
+        let totalWidth = 0;
+        if (versesRef.current.length > 0 && cumulativeWidthsRef.current.length > 0) {
+           totalWidth = cumulativeWidthsRef.current[versesRef.current.length - 1] + 
+                        (verseWidthsRef.current[versesRef.current[versesRef.current.length - 1].id] || 0);
+        }
+        const actualTranslate = newTargetX - totalWidth;
+        
+        const node: any = streamLineRef.current;
+        const el: HTMLElement | undefined = node?._nativeTag ? node._nativeTag : (node as unknown as HTMLElement);
+        if (el && el.style) {
+           el.style.transform = `translate3d(${isNaN(actualTranslate) ? 0 : actualTranslate}px, 0, 0)`;
+        }
       },
       onPanResponderRelease: (evt, gestureState) => {
         const isTap = Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5;
@@ -343,30 +377,35 @@ export default function QuranStreamWidget() {
           return;
         }
 
-        const finalX = scrollOffset.current + gestureState.dx;
-        scrollOffset.current = finalX;
-        smoothedXRef.current = finalX;
+        const finalTargetX = dragStartOffsetRef.current + gestureState.dx;
+        scrollOffset.current = finalTargetX;
+        smoothedXRef.current = finalTargetX;
         
-        let sum = 0;
         let foundIndex = 0;
         let foundProgress = 0;
         
+        let totalWidth = 0;
+        if (versesRef.current.length > 0 && cumulativeWidthsRef.current.length > 0) {
+           totalWidth = cumulativeWidthsRef.current[versesRef.current.length - 1] + 
+                        (verseWidthsRef.current[versesRef.current[versesRef.current.length - 1].id] || 0);
+        }
+
         for (let i = 0; i < versesRef.current.length; i++) {
           const w = verseWidthsRef.current[versesRef.current[i].id] || 0;
-          if (finalX < sum + w) {
+          const sum = cumulativeWidthsRef.current[i] || 0;
+          if (finalTargetX <= sum + w) {
             foundIndex = i;
-            let p = w > 0 ? (finalX - sum) / w : 0;
+            let p = w > 0 ? (finalTargetX - sum) / w : 0;
             foundProgress = Math.max(0, Math.min(1, p));
             break;
           }
-          sum += w;
         }
         
-        if (finalX >= sum && versesRef.current.length > 0) {
+        if (finalTargetX >= totalWidth && versesRef.current.length > 0) {
           foundIndex = versesRef.current.length - 1;
           foundProgress = 0.99;
         }
-        if (finalX < 0) {
+        if (finalTargetX < 0) {
           foundIndex = 0;
           foundProgress = 0;
         }
@@ -388,27 +427,29 @@ export default function QuranStreamWidget() {
         {verses.length === 0 && (
           <ActivityIndicator size="large" color={isDark ? '#e5e5ea' : '#1c1c1e'} style={{ position: 'absolute', alignSelf: 'center' }} />
         )}
-        <Animated.View style={[styles.streamLine, { transform: [{ translateX }], opacity: opacityAnim }]}>
-          {verses.map((verse) => (
-            <View 
-              key={verse.id} 
-              onLayout={(e) => {
-                const w = e.nativeEvent.layout.width;
-                if (verseWidthsAccumRef.current[verse.id] === w) return;
-                verseWidthsAccumRef.current[verse.id] = w;
-                verseWidthsRef.current[verse.id] = w;
-                
-                if (Object.keys(verseWidthsAccumRef.current).length >= verses.length && verses.length > 0) {
-                  setVerseWidths({ ...verseWidthsAccumRef.current });
-                }
-              }}
-              style={styles.verseWrapper}
-            >
-              <Text style={[styles.verseText, { color: isDark ? '#fff' : '#1c1c1e' }]}>
-                {verse.text_uthmani} ﴿{toArabicNumerals(verse.number)}﴾
-              </Text>
-            </View>
-          ))}
+        <Animated.View style={[{ opacity: opacityAnim }, StyleSheet.absoluteFill as any]} pointerEvents="box-none">
+          <View ref={streamLineRef} style={styles.streamLine}>
+            {verses.slice().reverse().map((verse) => (
+              <View 
+                key={verse.id} 
+                onLayout={(e) => {
+                  const w = e.nativeEvent.layout.width;
+                  if (verseWidthsAccumRef.current[verse.id] === w) return;
+                  verseWidthsAccumRef.current[verse.id] = w;
+                  verseWidthsRef.current[verse.id] = w;
+                  
+                  if (Object.keys(verseWidthsAccumRef.current).length >= verses.length && verses.length > 0) {
+                    setVerseWidths({ ...verseWidthsAccumRef.current });
+                  }
+                }}
+                style={[styles.verseWrapper, { contain: 'layout paint' } as any]}
+              >
+                <Text style={[styles.verseText, { color: isDark ? '#fff' : '#1c1c1e' }]}>
+                  {verse.text_uthmani} ﴿{toArabicNumerals(verse.number)}﴾
+                </Text>
+              </View>
+            ))}
+          </View>
         </Animated.View>
 
         {/* Center overlay when paused */}
@@ -440,15 +481,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     cursor: 'grab',
     touchAction: 'none' as 'none',
+    transform: [{ translateZ: 0 }] as any,
+    willChange: 'transform' as any,
   } as any,
   streamLine: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     position: 'absolute',
-    right: '50%', 
+    left: '50%', 
     top: 0,
     bottom: 0,
-  },
+    transform: [{ translateZ: 0 }] as any,
+    willChange: 'transform' as any,
+    backfaceVisibility: 'hidden' as any,
+  } as any,
   verseWrapper: {
     paddingHorizontal: 12,
   },
