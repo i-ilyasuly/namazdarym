@@ -1,0 +1,6 @@
+{
+  "name": "World Clock Widget UI",
+  "description": "A pixel-perfect, detailed reproduction of a modern world clock user interface component.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": []
+}
