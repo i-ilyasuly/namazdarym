@@ -10,7 +10,6 @@ import {
   Easing,
   Pressable,
 } from 'react-native';
-import { motion, AnimatePresence } from 'motion/react';
 import { Volume2, VolumeX, MapPin } from 'lucide-react';
 import { EclipseIcon, SunIcon, SunDimIcon, SunsetIcon, MoonStarIcon } from './PrayerIcons';
 import { ThemeContext } from '../../screens/TestScreen';
@@ -137,48 +136,73 @@ function ScrollTransition({
 }
 
 const RollingDigit = ({ digit, height, style }: { digit: number, height: number, style: any }) => {
-  const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  
+  const [currentDigit, setCurrentDigit] = useState(digit);
+  const [prevDigit, setPrevDigit] = useState(digit);
+  const anim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (digit !== currentDigit) {
+      setPrevDigit(currentDigit);
+      setCurrentDigit(digit);
+      anim.setValue(0);
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+    }
+  }, [digit]);
+
+  const translateYPrev = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -height / 2],
+  });
+
+  const translateYNext = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [height / 2, 0],
+  });
+
+  const opacityPrev = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+
+  const opacityNext = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
   return (
-    <div style={{ 
+    <View style={{ 
       height: height, 
-      overflow: 'hidden', 
-      display: 'inline-block',
-      position: 'relative',
-      width: '0.65em', // Fixed width for alignment
-      textAlign: 'center',
-      verticalAlign: 'bottom'
+      width: style.fontSize * 0.65, 
+      overflow: 'hidden',
     }}>
-      <motion.div
-        initial={false}
-        animate={{ y: -digit * height }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 400, 
-          damping: 35,
-          mass: 0.8
-        }}
-        style={{ 
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        {digits.map((num) => (
-          <div key={num} style={{ 
-            height: height, 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            ...style,
-            lineHeight: 1,
-            margin: 0,
-            padding: 0
-          }}>
-            {num}
-          </div>
-        ))}
-      </motion.div>
-    </div>
+      <Animated.View style={[
+        StyleSheet.absoluteFill, 
+        { 
+          transform: [{ translateY: translateYPrev }], 
+          opacity: opacityPrev,
+          justifyContent: 'center',
+          alignItems: 'center'
+        }
+      ]}>
+        <Text style={[style, { textAlign: 'center', lineHeight: height }]} numberOfLines={1}>{prevDigit}</Text>
+      </Animated.View>
+      <Animated.View style={[
+        StyleSheet.absoluteFill, 
+        { 
+          transform: [{ translateY: translateYNext }], 
+          opacity: opacityNext,
+          justifyContent: 'center',
+          alignItems: 'center'
+        }
+      ]}>
+        <Text style={[style, { textAlign: 'center', lineHeight: height }]} numberOfLines={1}>{currentDigit}</Text>
+      </Animated.View>
+    </View>
   );
 };
 
@@ -354,23 +378,12 @@ export default function NamazWidget() {
     };
 
     return (
-      <View style={baseStyle} pointerEvents="none">
-        <div style={{ 
-          fontFamily: baseStyle.fontFamily, 
-          fontSize: baseStyle.fontSize,
-          color: baseStyle.color || '#1a1a1c',
-          fontWeight: baseStyle.fontWeight,
-          letterSpacing: baseStyle.letterSpacing || 'normal',
-          display: 'flex',
-          alignItems: 'center',
-          lineHeight: 1
-        }}>
-          {renderTwoDigits(h)}
-          <span style={{ margin: '0 4px', transform: 'translateY(-2%)' }}>:</span>
-          {renderTwoDigits(m)}
-          <span style={{ margin: '0 4px', transform: 'translateY(-2%)' }}>:</span>
-          {renderTwoDigits(sVar)}
-        </div>
+      <View style={[baseStyle, { flexDirection: 'row', alignItems: 'center' }]} pointerEvents="none">
+        {renderTwoDigits(h)}
+        <Text style={[baseStyle, { marginHorizontal: s(4), transform: [{ translateY: -s(2) }] }]}>:</Text>
+        {renderTwoDigits(m)}
+        <Text style={[baseStyle, { marginHorizontal: s(4), transform: [{ translateY: -s(2) }] }]}>:</Text>
+        {renderTwoDigits(sVar)}
       </View>
     );
   };
