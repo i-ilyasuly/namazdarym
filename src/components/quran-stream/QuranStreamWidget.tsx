@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
-import { CirclePlay, CirclePause, ChevronDown } from 'lucide-react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Easing } from 'react-native';
+import { CirclePlay, CirclePause } from 'lucide-react';
 import { useLocalStorage } from 'react-use';
 import { fetchChapterVerses, VerseItem } from './quranApi';
 import { ThemeContext } from '../../screens/TestScreen';
@@ -8,134 +8,127 @@ import { ThemeContext } from '../../screens/TestScreen';
 export default function QuranStreamWidget() {
   const { isDark } = useContext(ThemeContext);
   
-  const [currentChapter, setCurrentChapter] = useLocalStorage<number>('quran_chapter', 1);
+  const [currentChapter] = useLocalStorage<number>('quran_chapter', 1);
   const [verses, setVerses] = useState<VerseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [textWidth, setTextWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  const scrollRef = useRef<ScrollView>(null);
-  const positionRef = useRef(0);
-  const animFrameRef = useRef<number | null>(null);
-  const contentHeightRef = useRef(0);
-  const containerHeightRef = useRef(0);
-  const isUserScrollingRef = useRef(false);
-  const userScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Animation values
+  const translateX = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  // Fetch verses when chapter changes
+  // Fetch when chapter changes
   useEffect(() => {
     if (!currentChapter) return;
     setIsLoading(true);
     fetchChapterVerses(currentChapter).then(data => {
       setVerses(data);
       setIsLoading(false);
-      // Reset scroll position on new chapter
-      positionRef.current = 0;
-      if (scrollRef.current) {
-        scrollRef.current.scrollTo({ y: 0, animated: false });
-      }
+      // Reset widths to force re-measure if content changes significantly
+      setTextWidth(0); 
     });
   }, [currentChapter]);
 
-  const startScroll = () => {
-    const scroll = () => {
-      if (!isUserScrollingRef.current && isPlaying) {
-        const maxScroll = contentHeightRef.current - containerHeightRef.current;
-        
-        if (positionRef.current < maxScroll) {
-          positionRef.current += 0.5; // Smooth speed
-          if (scrollRef.current) {
-            scrollRef.current.scrollTo({ y: positionRef.current, animated: false });
-          }
-        } else {
-          // Reached the end, stop
-          setIsPlaying(false);
-          return;
-        }
-      }
-      animFrameRef.current = requestAnimationFrame(scroll);
-    };
-    
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(scroll);
-  };
+  // Combined text: Sequence 1, 2, 3... but for LTR movement we reverse to have V1 as lead
+  const combinedText = verses.map(v => `${v.text_uthmani} ﴿${v.number}﴾`).join('   ۞   ');
 
-  const stopScroll = () => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-  };
-
+  // Animation Loop logic
   useEffect(() => {
-    if (isPlaying && !isLoading) {
-      startScroll();
-    } else {
-      stopScroll();
+    // Only start if we have all dimensions and are playing
+    if (isLoading || verses.length === 0 || textWidth <= 0 || containerWidth <= 0 || !isPlaying) {
+      translateX.stopAnimation();
+      return;
     }
-    return () => stopScroll();
-  }, [isPlaying, isLoading]);
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const y = event.nativeEvent.contentOffset.y;
-    
-    // If it's a significant jump (user manual scroll)
-    if (Math.abs(y - positionRef.current) > 5) {
-      isUserScrollingRef.current = true;
-      positionRef.current = y;
+    const totalDistance = textWidth + containerWidth;
+    const duration = totalDistance * 25; // 25ms per pixel (speed)
 
-      if (userScrollTimeoutRef.current) clearTimeout(userScrollTimeoutRef.current);
-      userScrollTimeoutRef.current = setTimeout(() => {
-        isUserScrollingRef.current = false;
-      }, 1500); // Resume auto-scroll after 1.5s of inactivity
-    }
-  };
+    const startTicker = () => {
+      // Ensure we start from current container width (right edge)
+      translateX.setValue(containerWidth);
+      
+      const animation = Animated.timing(translateX, {
+        toValue: -textWidth,
+        duration: (textWidth + containerWidth) * 25,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+
+      animationRef.current = animation;
+      animation.start(({ finished }) => {
+        if (finished && isPlaying) {
+          startTicker();
+        }
+      });
+    };
+
+    startTicker();
+
+    return () => {
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+      translateX.stopAnimation();
+    };
+  }, [combinedText, isPlaying, isLoading, textWidth, containerWidth]);
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#1c1c1e' : '#fff' }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#1c1c1e' : '#f8f8fa' }]}>
+      <View style={styles.headerRow}>
         <View>
           <Text style={[styles.title, { color: isDark ? '#fff' : '#1c1c1e' }]}>Quran Stream</Text>
-          <Text style={styles.subtitle}>Chapter {currentChapter}</Text>
+          <Text style={{ fontSize: 11, color: '#8e8e93' }}>Surah {currentChapter}</Text>
         </View>
         <TouchableOpacity 
           onPress={() => setIsPlaying(!isPlaying)}
           style={styles.playButton}
         >
           {isPlaying ? (
-            <CirclePause size={32} color="#10b981" />
+            <CirclePause size={28} color="#10b981" />
           ) : (
-            <CirclePlay size={32} color="#10b981" />
+            <CirclePlay size={28} color="#10b981" />
           )}
         </TouchableOpacity>
       </View>
 
-      <View style={styles.scrollContainer}>
+      <View style={styles.streamWrapper}>
         {isLoading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#10b981" />
+            <ActivityIndicator size="small" color="#10b981" />
           </View>
         ) : (
-          <ScrollView
-            ref={scrollRef}
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            onContentSizeChange={(_, h) => {
-              contentHeightRef.current = h;
-            }}
-            onLayout={(e) => {
-              containerHeightRef.current = e.nativeEvent.layout.height;
+          <View 
+            style={styles.tickerContainer}
+            onLayout={e => { 
+                const w = e.nativeEvent.layout.width;
+                if (w > 0 && w !== containerWidth) setContainerWidth(w);
             }}
           >
-            {verses.map((verse) => (
-              <View key={verse.id} style={styles.verseItem}>
-                <Text style={[styles.verseText, { color: isDark ? '#e5e5ea' : '#1c1c1e' }]}>
-                  {verse.text_uthmani} <Text style={styles.verseNumber}>﴿{verse.number}﴾</Text>
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
+            {/* Hidden Measurement View */}
+            <View 
+              style={[styles.scrollingContent, { opacity: 0, position: 'absolute', top: -1000 }]}
+              onLayout={e => { 
+                const w = e.nativeEvent.layout.width;
+                if (w > 0 && w !== textWidth) setTextWidth(w);
+              }}
+            >
+              <Text style={[styles.verseText, { whiteSpace: 'nowrap' } as any]}>{combinedText}</Text>
+            </View>
+
+            {/* Visible Animated View */}
+            <Animated.View 
+              style={[
+                styles.scrollingContent,
+                { position: 'absolute', transform: [{ translateX }] }
+              ]}
+            >
+              <Text style={[styles.verseText, { color: isDark ? '#e5e5ea' : '#333', whiteSpace: 'nowrap' } as any]}>
+                {combinedText}
+              </Text>
+            </Animated.View>
+          </View>
         )}
       </View>
     </View>
@@ -150,51 +143,48 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: 16,
     overflow: 'hidden',
-    height: 400,
+    height: 140,
     borderWidth: 0.5,
     borderColor: 'rgba(28, 28, 30, 0.05)',
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: 'rgba(28, 28, 30, 0.1)',
   },
+  playButton: {
+    padding: 2,
+  },
   title: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#8e8e93',
-  },
-  playButton: {
-    padding: 4,
-  },
-  scrollContainer: {
+  streamWrapper: {
     flex: 1,
+    justifyContent: 'center',
+    minHeight: 80,
   },
-  scrollView: {
-    flex: 1,
+  tickerContainer: {
+    width: '100%',
+    height: 80,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  verseItem: {
-    marginBottom: 24,
+  scrollingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    // We set position absolute in the component inline styles
   },
   verseText: {
-    fontFamily: '"Amiri Quran", "Amiri", serif',
     fontSize: 26,
-    lineHeight: 48,
+    fontFamily: '"Amiri Quran", "Amiri", serif',
     textAlign: 'right',
-  },
-  verseNumber: {
-    fontSize: 18,
-    color: '#10b981',
+    writingDirection: 'rtl',
+    paddingHorizontal: 20,
   },
   center: {
     flex: 1,
@@ -202,6 +192,3 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-
-
-

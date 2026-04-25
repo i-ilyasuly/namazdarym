@@ -201,20 +201,22 @@ export default function NamazWidget() {
         
         const response = await fetch(url);
         const data = await response.json();
-        const currentDay = new Date().getDate();
-        const todayData = data.data.find((d: any) => parseInt(d.date.gregorian.day, 10) === currentDay);
-        
-        if (todayData) {
-          const t = todayData.timings;
-          // Note: keeping the previous default icon/ID mapping used in TestScreen
-          const newPrayers = [
-            { id: 0, name: 'Таң', time: t.Fajr.split(' ')[0], Icon: EclipseIcon },
-            { id: 1, name: 'Бесін', time: t.Dhuhr.split(' ')[0], Icon: SunIcon },
-            { id: 2, name: 'Екінті', time: t.Asr.split(' ')[0], Icon: SunDimIcon },
-            { id: 3, name: 'Шам', time: t.Maghrib.split(' ')[0], Icon: SunsetIcon },
-            { id: 4, name: 'Құптан', time: t.Isha.split(' ')[0], Icon: MoonStarIcon },
-          ];
-          setPrayersData(newPrayers);
+        if (data && data.data && Array.isArray(data.data)) {
+          const currentDay = new Date().getDate();
+          const todayData = data.data.find((d: any) => d.date?.gregorian?.day && parseInt(d.date.gregorian.day, 10) === currentDay);
+          
+          if (todayData && todayData.timings) {
+            const t = todayData.timings;
+            // Note: keeping the previous default icon/ID mapping used in TestScreen
+            const newPrayers = [
+              { id: 0, name: 'Таң', time: t.Fajr.split(' ')[0], Icon: EclipseIcon },
+              { id: 1, name: 'Бесін', time: t.Dhuhr.split(' ')[0], Icon: SunIcon },
+              { id: 2, name: 'Екінті', time: t.Asr.split(' ')[0], Icon: SunDimIcon },
+              { id: 3, name: 'Шам', time: t.Maghrib.split(' ')[0], Icon: SunsetIcon },
+              { id: 4, name: 'Құптан', time: t.Isha.split(' ')[0], Icon: MoonStarIcon },
+            ];
+            setPrayersData(newPrayers);
+          }
         }
       } catch (error) {
         console.error("Error fetching prayer times:", error);

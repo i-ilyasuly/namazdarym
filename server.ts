@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import axios from "axios";
 
 async function startServer() {
   const app = express();
@@ -14,13 +15,27 @@ async function startServer() {
     try {
       const { year, month, lat, lng } = req.query;
       const url = `https://api.aladhan.com/v1/calendar/${year}/${month}?latitude=${lat}&longitude=${lng}&method=2`;
-      console.log("Fetching prayer times:", url);
-      const fetchRes = await fetch(url);
-      const data = await fetchRes.json();
-      res.json(data);
+      console.log("Fetching prayer times from proxy:", url);
+      
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+        },
+        timeout: 10000
+      });
+      
+      res.json(response.data);
     } catch (error) {
       console.error("Proxy error (prayer):", error);
-      res.status(500).json({ error: "Failed to proxy prayer times" });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isSslError = errorMessage.includes('SSL') || errorMessage.includes('TLS');
+      
+      res.status(500).json({ 
+        error: "Failed to proxy prayer times", 
+        details: errorMessage,
+        isSslError
+      });
     }
   });
 
@@ -29,9 +44,8 @@ async function startServer() {
     try {
       const { chapter } = req.query;
       const url = `https://api.quran.com/api/v4/quran/verses/uthmani?chapter_number=${chapter}`;
-      const fetchRes = await fetch(url);
-      const data = await fetchRes.json();
-      res.json(data);
+      const response = await axios.get(url);
+      res.json(response.data);
     } catch (error) {
       console.error("Proxy error (quran verses):", error);
       res.status(500).json({ error: "Failed to proxy quran verses" });
@@ -43,9 +57,8 @@ async function startServer() {
     try {
       const { chapter } = req.query;
       const url = `https://api.quran.com/api/v4/recitations/4/by_chapter/${chapter}?per_page=300`;
-      const fetchRes = await fetch(url);
-      const data = await fetchRes.json();
-      res.json(data);
+      const response = await axios.get(url);
+      res.json(response.data);
     } catch (error) {
       console.error("Proxy error (quran audio):", error);
       res.status(500).json({ error: "Failed to proxy quran audio" });
