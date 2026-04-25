@@ -12,11 +12,11 @@ export default function QuranStreamWidget() {
   const [verses, setVerses] = useState<VerseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [textWidth, setTextWidth] = useState(0);
-  const [containerWidth, setContainerWidth] = useState(0);
 
   // Animation values
-  const translateX = useRef(new Animated.Value(0)).current;
+  const translateXAnim = useRef(new Animated.Value(0)).current;
+  const textWidthRef = useRef(0);
+  const containerWidthRef = useRef(0);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   // Fetch when chapter changes
@@ -26,38 +26,44 @@ export default function QuranStreamWidget() {
     fetchChapterVerses(currentChapter).then(data => {
       setVerses(data);
       setIsLoading(false);
-      // Reset widths to force re-measure if content changes significantly
-      setTextWidth(0); 
+      // Reset animation state for new content
+      translateXAnim.setValue(0);
+      textWidthRef.current = 0; // Force re-measure
     });
   }, [currentChapter]);
 
-  // Combined text: Sequence 1, 2, 3... but for LTR movement we reverse to have V1 as lead
+  // Combine verses: Arabic reads right-to-left
   const combinedText = verses.map(v => `${v.text_uthmani} ﴿${v.number}﴾`).join('   ۞   ');
 
-  // Animation Loop logic
+  // Animation logic
   useEffect(() => {
-    // Only start if we have all dimensions and are playing
-    if (isLoading || verses.length === 0 || textWidth <= 0 || containerWidth <= 0 || !isPlaying) {
-      translateX.stopAnimation();
-      return;
-    }
-
-    const totalDistance = textWidth + containerWidth;
-    const duration = totalDistance * 25; // 25ms per pixel (speed)
+    if (isLoading || verses.length === 0) return;
 
     const startTicker = () => {
-      // Ensure we start from current container width (right edge)
-      translateX.setValue(containerWidth);
+      if (!isPlaying) {
+        translateXAnim.stopAnimation();
+        return;
+      }
+
+      // We wait for layouts to be measured. If not measured yet, retry shortly.
+      if (textWidthRef.current === 0 || containerWidthRef.current === 0) {
+        setTimeout(startTicker, 100);
+        return;
+      }
+
+      const totalDistance = textWidthRef.current + containerWidthRef.current;
       
-      const animation = Animated.timing(translateX, {
-        toValue: -textWidth,
-        duration: (textWidth + containerWidth) * 25,
+      // Start from the right edge of the container
+      translateXAnim.setValue(containerWidthRef.current);
+      
+      animationRef.current = Animated.timing(translateXAnim, {
+        toValue: -textWidthRef.current, // Exit through the left edge
+        duration: totalDistance * 25, // 25ms per pixel
         easing: Easing.linear,
         useNativeDriver: true,
       });
 
-      animationRef.current = animation;
-      animation.start(({ finished }) => {
+      animationRef.current.start(({ finished }) => {
         if (finished && isPlaying) {
           startTicker();
         }
@@ -67,19 +73,16 @@ export default function QuranStreamWidget() {
     startTicker();
 
     return () => {
-      if (animationRef.current) {
-        animationRef.current.stop();
-      }
-      translateX.stopAnimation();
+      if (animationRef.current) animationRef.current.stop();
     };
-  }, [combinedText, isPlaying, isLoading, textWidth, containerWidth]);
+  }, [combinedText, isPlaying, isLoading]);
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#1c1c1e' : '#f8f8fa' }]}>
       <View style={styles.headerRow}>
         <View>
           <Text style={[styles.title, { color: isDark ? '#fff' : '#1c1c1e' }]}>Quran Stream</Text>
-          <Text style={{ fontSize: 11, color: '#8e8e93' }}>Surah {currentChapter}</Text>
+          <Text style={styles.subtitle}>Surah {currentChapter}</Text>
         </View>
         <TouchableOpacity 
           onPress={() => setIsPlaying(!isPlaying)}
@@ -102,29 +105,19 @@ export default function QuranStreamWidget() {
           <View 
             style={styles.tickerContainer}
             onLayout={e => { 
-                const w = e.nativeEvent.layout.width;
-                if (w > 0 && w !== containerWidth) setContainerWidth(w);
+                containerWidthRef.current = e.nativeEvent.layout.width;
             }}
           >
-            {/* Hidden Measurement View */}
-            <View 
-              style={[styles.scrollingContent, { opacity: 0, position: 'absolute', top: -1000 }]}
-              onLayout={e => { 
-                const w = e.nativeEvent.layout.width;
-                if (w > 0 && w !== textWidth) setTextWidth(w);
-              }}
-            >
-              <Text style={[styles.verseText, { whiteSpace: 'nowrap' } as any]}>{combinedText}</Text>
-            </View>
-
-            {/* Visible Animated View */}
             <Animated.View 
               style={[
                 styles.scrollingContent,
-                { position: 'absolute', transform: [{ translateX }] }
+                { transform: [{ translateX: translateXAnim }] }
               ]}
+              onLayout={e => { 
+                textWidthRef.current = e.nativeEvent.layout.width;
+              }}
             >
-              <Text style={[styles.verseText, { color: isDark ? '#e5e5ea' : '#333', whiteSpace: 'nowrap' } as any]}>
+              <Text style={[styles.verseText, { color: isDark ? '#e5e5ea' : '#333' }]}>
                 {combinedText}
               </Text>
             </Animated.View>
@@ -155,12 +148,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: 'rgba(28, 28, 30, 0.1)',
   },
-  playButton: {
-    padding: 2,
-  },
   title: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  subtitle: {
+    fontSize: 11,
+    color: '#8e8e93',
+  },
+  playButton: {
+    padding: 2,
   },
   streamWrapper: {
     flex: 1,
@@ -175,17 +172,18 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   scrollingContent: {
+    position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
-    // We set position absolute in the component inline styles
   },
   verseText: {
     fontSize: 26,
     fontFamily: '"Amiri Quran", "Amiri", serif',
     textAlign: 'right',
     writingDirection: 'rtl',
+    whiteSpace: 'nowrap',
     paddingHorizontal: 20,
-  },
+  } as any,
   center: {
     flex: 1,
     justifyContent: 'center',
