@@ -135,77 +135,6 @@ function ScrollTransition({
   );
 }
 
-const RollingDigit = ({ digit, height, style }: { digit: number, height: number, style: any }) => {
-  const [currentDigit, setCurrentDigit] = useState(digit);
-  const [prevDigit, setPrevDigit] = useState(digit);
-  const anim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (digit !== currentDigit) {
-      setPrevDigit(currentDigit);
-      setCurrentDigit(digit);
-      anim.setValue(0);
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.cubic),
-      }).start();
-    }
-  }, [digit]);
-
-  const translateYPrev = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -height / 2],
-  });
-
-  const translateYNext = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [height / 2, 0],
-  });
-
-  const opacityPrev = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-
-  const opacityNext = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  return (
-    <View style={{ 
-      height: height, 
-      width: style.fontSize * 0.65, 
-      overflow: 'hidden',
-    }}>
-      <Animated.View style={[
-        StyleSheet.absoluteFill, 
-        { 
-          transform: [{ translateY: translateYPrev }], 
-          opacity: opacityPrev,
-          justifyContent: 'center',
-          alignItems: 'center'
-        }
-      ]}>
-        <Text style={[style, { textAlign: 'center', lineHeight: height }]} numberOfLines={1}>{prevDigit}</Text>
-      </Animated.View>
-      <Animated.View style={[
-        StyleSheet.absoluteFill, 
-        { 
-          transform: [{ translateY: translateYNext }], 
-          opacity: opacityNext,
-          justifyContent: 'center',
-          alignItems: 'center'
-        }
-      ]}>
-        <Text style={[style, { textAlign: 'center', lineHeight: height }]} numberOfLines={1}>{currentDigit}</Text>
-      </Animated.View>
-    </View>
-  );
-};
-
 export default function NamazWidget() {
   const { width } = useWindowDimensions(); 
   const { colorMode } = useContext(ThemeContext);
@@ -353,7 +282,6 @@ export default function NamazWidget() {
   const fontFamily = Platform.OS === 'web' 
     ? '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif'
     : 'System';
-
   const monoFontFamily = Platform.OS === 'web' 
     ? '"Roboto Mono", monospace'
     : 'System';
@@ -363,28 +291,12 @@ export default function NamazWidget() {
     const m = Math.floor((seconds % 3600) / 60);
     const sVar = seconds % 60;
 
-    const baseStyle = Array.isArray(style) ? Object.assign({}, ...style) : style;
-    const digitHeight = baseStyle.fontSize * 1.25;
-
-    const renderTwoDigits = (value: number) => {
-      const d1 = Math.floor(value / 10);
-      const d2 = value % 10;
-      return (
-        <>
-          <RollingDigit digit={d1} height={digitHeight} style={baseStyle} />
-          <RollingDigit digit={d2} height={digitHeight} style={baseStyle} />
-        </>
-      );
-    };
+    const pad = (n: number) => (n < 10 ? `0${n}` : n);
 
     return (
-      <View style={[baseStyle, { flexDirection: 'row', alignItems: 'center' }]} pointerEvents="none">
-        {renderTwoDigits(h)}
-        <Text style={[baseStyle, { marginHorizontal: s(4), transform: [{ translateY: -s(2) }] }]}>:</Text>
-        {renderTwoDigits(m)}
-        <Text style={[baseStyle, { marginHorizontal: s(4), transform: [{ translateY: -s(2) }] }]}>:</Text>
-        {renderTwoDigits(sVar)}
-      </View>
+      <Text style={style} pointerEvents="none">
+        {pad(h)}:{pad(m)}:{pad(sVar)}
+      </Text>
     );
   };
 
