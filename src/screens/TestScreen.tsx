@@ -14,7 +14,7 @@ import QuranStreamWidget from '../components/quran-stream/QuranStreamWidget';
 const SC = 0.7; // 30% scale reduction base
 const s = (v: number) => v * SC;
 
-export type ColorMode = 'vibrant' | 'monochrome';
+export type ColorMode = 'vibrant' | 'monochrome' | 'minimal';
 
 // Create a simple Theme Context
 export const ThemeContext = React.createContext({ 
@@ -34,7 +34,11 @@ export default function TestScreen() {
       isDark, 
       colorMode,
       toggleTheme: () => setIsDark(!isDark),
-      toggleColorMode: () => setColorMode(prev => prev === 'vibrant' ? 'monochrome' : 'vibrant')
+      toggleColorMode: () => setColorMode(prev => {
+        if (prev === 'vibrant') return 'monochrome';
+        if (prev === 'monochrome') return 'minimal';
+        return 'vibrant';
+      })
     }}>
       <ScrollView 
         style={[styles.container, { backgroundColor: isDark ? '#000' : '#f8f9fa' }]}
@@ -44,13 +48,19 @@ export default function TestScreen() {
         <View style={styles.controlsContainer}>
           <TouchableOpacity 
             style={styles.iconButton} 
-            onPress={() => setColorMode(prev => prev === 'vibrant' ? 'monochrome' : 'vibrant')}
+            onPress={() => setColorMode(prev => {
+              if (prev === 'vibrant') return 'monochrome';
+              if (prev === 'monochrome') return 'minimal';
+              return 'vibrant';
+            })}
             activeOpacity={0.8}
           >
             {colorMode === 'vibrant' ? (
                <Palette color={isDark ? '#fff' : '#1c1c1e'} size={24} />
-            ) : (
+            ) : colorMode === 'monochrome' ? (
                <Droplet color={isDark ? '#fff' : '#1c1c1e'} size={24} />
+            ) : (
+               <Palette color={isDark ? '#fff' : '#1c1c1e'} size={24} opacity={0.5} />
             )}
           </TouchableOpacity>
           <TouchableOpacity 

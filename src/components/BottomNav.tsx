@@ -2,8 +2,8 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
 
 interface BottomNavProps {
-  activeTab: 'home' | 'test';
-  onTabChange: (tab: 'home' | 'test') => void;
+  activeTab: 'home' | 'test' | 'widgets';
+  onTabChange: (tab: 'home' | 'test' | 'widgets') => void;
 }
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -32,6 +32,16 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           Сынақ
         </Text>
       </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.navItem, activeTab === 'widgets' && styles.navItemActive]} 
+        onPress={() => onTabChange('widgets')}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.navText, activeTab === 'widgets' && styles.navTextActive, { fontFamily }]}>
+          Виджет
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -39,15 +49,14 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
 const styles = StyleSheet.create({
   navContainer: {
     flexDirection: 'row',
-    height: 80,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e5ea',
-    paddingBottom: 20, // safe area approximation
+    paddingTop: 16,
+    paddingBottom: 32, // safe area approximation
   },
   navItem: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
   },
   navItemActive: {
@@ -57,6 +66,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#8e8e93',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   navTextActive: {
     color: '#1c1c1e',

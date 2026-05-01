@@ -13,7 +13,7 @@ export default function QuranStreamWidget() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
 
-  // Animation values
+  // Animation values - Essential for GPU-accelerated translateX
   const translateXAnim = useRef(new Animated.Value(0)).current;
   const textWidthRef = useRef(0);
   const containerWidthRef = useRef(0);
@@ -26,46 +26,50 @@ export default function QuranStreamWidget() {
     fetchChapterVerses(currentChapter).then(data => {
       setVerses(data);
       setIsLoading(false);
-      // Reset animation state for new content
-      translateXAnim.setValue(0);
-      textWidthRef.current = 0; // Force re-measure
+      // Reset measurements and animation
+      textWidthRef.current = 0;
+      setMeasuredCount(prev => prev + 1);
     });
   }, [currentChapter]);
 
-  // Combine verses: Arabic reads right-to-left
+  // Combine verses into one single text line
   const combinedText = verses.map(v => `${v.text_uthmani} ﴿${v.number}﴾`).join('   ۞   ');
 
-  // Animation logic
+  // Animation logic using translateX for maximum performance
   useEffect(() => {
-    if (isLoading || verses.length === 0) return;
+    if (isLoading || verses.length === 0 || !isPlaying) {
+      if (animationRef.current) animationRef.current.stop();
+      return;
+    }
+
+    let isCancelled = false;
 
     const startTicker = () => {
-      if (!isPlaying) {
-        translateXAnim.stopAnimation();
-        return;
-      }
+      if (isCancelled) return;
 
-      // We wait for layouts to be measured. If not measured yet, retry shortly.
+      // Ensure we have dimensions before starting
       if (textWidthRef.current === 0 || containerWidthRef.current === 0) {
-        setTimeout(startTicker, 100);
+        // Retry shortly if layout isn't measured yet
+        setTimeout(startTicker, 200);
         return;
       }
 
       const totalDistance = textWidthRef.current + containerWidthRef.current;
       
-      // Start from the right edge of the container
-      translateXAnim.setValue(containerWidthRef.current);
+      // Arabic flows Right-To-Left.
+      translateXAnim.setValue(-textWidthRef.current);
       
-      animationRef.current = Animated.timing(translateXAnim, {
-        toValue: -textWidthRef.current, // Exit through the left edge
-        duration: totalDistance * 25, // 25ms per pixel
+      const anim = Animated.timing(translateXAnim, {
+        toValue: containerWidthRef.current, // Exit through the right edge
+        duration: totalDistance * 20,  // Faster duration so we can see it moving
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: true,         
       });
 
-      animationRef.current.start(({ finished }) => {
-        if (finished && isPlaying) {
-          startTicker();
+      animationRef.current = anim;
+      anim.start(({ finished }) => {
+        if (finished && !isCancelled && isPlaying) {
+          startTicker(); // Re-trigger for continuous loop
         }
       });
     };
@@ -73,16 +77,17 @@ export default function QuranStreamWidget() {
     startTicker();
 
     return () => {
+      isCancelled = true;
       if (animationRef.current) animationRef.current.stop();
     };
-  }, [combinedText, isPlaying, isLoading]);
+  }, [combinedText, isPlaying, isLoading]); // Removed measuredCount dependency
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#1c1c1e' : '#f8f8fa' }]}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.title, { color: isDark ? '#fff' : '#1c1c1e' }]}>Quran Stream</Text>
-          <Text style={styles.subtitle}>Surah {currentChapter}</Text>
+          <Text style={[styles.title, { color: isDark ? '#fff' : '#1c1c1e' }]}>Құран ағыны</Text>
+          <Text style={styles.subtitle}>{currentChapter}-ші сүре</Text>
         </View>
         <TouchableOpacity 
           onPress={() => setIsPlaying(!isPlaying)}
@@ -104,20 +109,29 @@ export default function QuranStreamWidget() {
         ) : (
           <View 
             style={styles.tickerContainer}
-            onLayout={e => { 
-                containerWidthRef.current = e.nativeEvent.layout.width;
+            onLayout={(e) => { 
+                const w = e.nativeEvent.layout.width;
+                if (w > 0) {
+                  containerWidthRef.current = w;
+                }
             }}
           >
             <Animated.View 
               style={[
-                styles.scrollingContent,
+                styles.scrollingText,
                 { transform: [{ translateX: translateXAnim }] }
               ]}
-              onLayout={e => { 
-                textWidthRef.current = e.nativeEvent.layout.width;
-              }}
             >
-              <Text style={[styles.verseText, { color: isDark ? '#e5e5ea' : '#333' }]}>
+              <Text 
+                numberOfLines={1}
+                style={[styles.verseText, { color: isDark ? '#e5e5ea' : '#333' }]}
+                onLayout={(e) => { 
+                  const w = e.nativeEvent.layout.width;
+                  if (w > 0) {
+                    textWidthRef.current = w;
+                  }
+                }}
+              >
                 {combinedText}
               </Text>
             </Animated.View>
@@ -166,13 +180,15 @@ const styles = StyleSheet.create({
   },
   tickerContainer: {
     width: '100%',
-    height: 80,
+    height: 60,
     overflow: 'hidden',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
     position: 'relative',
   },
-  scrollingContent: {
+  scrollingText: {
     position: 'absolute',
+    left: 0,
     flexDirection: 'row',
     alignItems: 'center',
   },

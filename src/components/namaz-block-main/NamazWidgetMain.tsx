@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 import NumberFlow from '@number-flow/react';
 import {
   StyleSheet,
@@ -165,34 +166,44 @@ export default function NamazWidgetMain() {
 
   useEffect(() => {
     const fetchPrayerTimes = async () => {
+      // Ensure we have coordinates
+      const lat = location.lat || 51.133333; // Default to Astana
+      const lng = location.lng || 71.433333;
+
       try {
-        const lat = location.lat;
-        const lng = location.lng;
-        const year = new Date().getFullYear();
-        const month = new Date().getMonth() + 1;
-        const url = `/api/prayer-times?year=${year}&month=${month}&lat=${lat}&lng=${lng}`;
+        const d = new Date();
+        const year = d.getFullYear();
+        const monthStr = String(d.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(d.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${monthStr}-${dayStr}`;
         
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data && data.data && Array.isArray(data.data)) {
-          const currentDay = new Date().getDate();
-          const todayData = data.data.find((d: any) => d.date?.gregorian?.day && parseInt(d.date.gregorian.day, 10) === currentDay);
+        const url = `/api/prayer-times?year=${year}&lat=${lat}&lng=${lng}`;
+        
+        console.log(`[Fetch] Prayer times from: ${url}`);
+        const response = await axios.get(url, {
+          timeout: 10000
+        });
+        
+        const data = response.data;
+        if (data && data.result && Array.isArray(data.result)) {
+          const todayData = data.result.find((d: any) => d.Date === todayStr);
           
-          if (todayData && todayData.timings) {
-            const t = todayData.timings;
-            // Note: keeping the previous default icon/ID mapping used in TestScreen
+          if (todayData) {
             const newPrayers = [
-              { id: 0, name: 'Таң', time: t.Fajr.split(' ')[0], Icon: EclipseIcon },
-              { id: 1, name: 'Бесін', time: t.Dhuhr.split(' ')[0], Icon: SunIcon },
-              { id: 2, name: 'Екінті', time: t.Asr.split(' ')[0], Icon: SunDimIcon },
-              { id: 3, name: 'Шам', time: t.Maghrib.split(' ')[0], Icon: SunsetIcon },
-              { id: 4, name: 'Құптан', time: t.Isha.split(' ')[0], Icon: MoonStarIcon },
+              { id: 0, name: 'Таң', time: todayData.fajr, Icon: EclipseIcon },
+              { id: 1, name: 'Бесін', time: todayData.dhuhr, Icon: SunIcon },
+              { id: 2, name: 'Екінті', time: todayData.asr, Icon: SunDimIcon },
+              { id: 3, name: 'Шам', time: todayData.maghrib, Icon: SunsetIcon },
+              { id: 4, name: 'Құптан', time: todayData.isha, Icon: MoonStarIcon },
             ];
             setPrayersData(newPrayers);
           }
         }
       } catch (error) {
-        console.error("Error fetching prayer times:", error);
+        console.error("!! Error fetching prayer times !!", error);
+        if (error instanceof Error) {
+          console.error("Error Message:", error.message);
+        }
       }
     };
 
