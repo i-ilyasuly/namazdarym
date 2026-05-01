@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  StyleSheet,
-  View,
-  ScrollView,
-  useWindowDimensions,
-} from 'react-native';
+import { StyleSheet, View, ScrollView, useWindowDimensions } from 'react-native';
 import NamazWidgetMain from '../components/namaz-block-main/NamazWidgetMain';
 
 const SC = 0.7; // 30% scale reduction base
@@ -14,16 +9,22 @@ export default function HomeScreen() {
   const { height } = useWindowDimensions();
 
   return (
-    <ScrollView 
-      contentContainerStyle={[styles.scrollContent, { minHeight: height - 80 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <NamazWidgetMain />
-    </ScrollView>
+    <View style={styles.container}>
+      <ScrollView 
+        contentContainerStyle={[styles.scrollContent, { minHeight: height - 120 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <NamazWidgetMain />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',

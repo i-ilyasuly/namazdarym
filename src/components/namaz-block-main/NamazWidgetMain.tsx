@@ -547,17 +547,6 @@ export default function NamazWidgetMain() {
         
         </View>
       </View>
-      
-      <TouchableOpacity 
-        style={[styles.locateBtn, { marginTop: s(24) }]} 
-        onPress={handleLocate}
-        disabled={isLocating}
-      >
-        <MapPin color="#1c1c1e" size={s(20)} strokeWidth={2.5} />
-        <Text style={[styles.locateText, { fontFamily }]}>
-          {isLocating ? 'Орын анықталуда...' : 'Орнымды анықтау'}
-        </Text>
-      </TouchableOpacity>
     </View>
   );
 }

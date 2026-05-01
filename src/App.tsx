@@ -3,10 +3,11 @@ import { StyleSheet, SafeAreaView, View } from 'react-native';
 import HomeScreen from './screens/HomeScreen';
 import TestScreen from './screens/TestScreen';
 import WidgetsScreen from './screens/WidgetsScreen';
+import StatsScreen from './screens/StatsScreen';
 import BottomNav from './components/BottomNav';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'home' | 'test' | 'widgets'>('widgets');
+  const [activeTab, setActiveTab] = useState<'home' | 'test' | 'widgets' | 'stats'>('widgets');
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -19,6 +20,9 @@ export default function App() {
         </View>
         <View style={[styles.screenContainer, activeTab !== 'widgets' && styles.hidden]}>
           <WidgetsScreen />
+        </View>
+        <View style={[styles.screenContainer, activeTab !== 'stats' && styles.hidden]}>
+          <StatsScreen />
         </View>
       </View>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

@@ -309,7 +309,7 @@ export default function NamazWidget() {
   const frontAnimatedStyle = {
     transform: [
       {
-        rotateY: flipAnim.interpolate({
+        rotateX: flipAnim.interpolate({
           inputRange: [0, 1],
           outputRange: ['0deg', '180deg']
         })
@@ -320,7 +320,7 @@ export default function NamazWidget() {
   const backAnimatedStyle = {
     transform: [
       {
-        rotateY: flipAnim.interpolate({
+        rotateX: flipAnim.interpolate({
           inputRange: [0, 1],
           outputRange: ['180deg', '360deg']
         })
@@ -491,7 +491,7 @@ export default function NamazWidget() {
         onLayout={(e) => setTopDim({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
         style={{ zIndex: 10, position: 'relative' }}
       >
-        <Animated.View style={[{ backfaceVisibility: 'hidden' as any }, frontAnimatedStyle, !isDark && { shadowColor: '#000', shadowOffset: { width: 0, height: s(4) }, shadowOpacity: 0.08, shadowRadius: s(10), elevation: 4, backgroundColor: 'transparent', borderRadius: topBlockRadius }]}>
+        <Animated.View style={[{ backfaceVisibility: 'hidden' as any }, frontAnimatedStyle, !isDark && { backgroundColor: 'transparent', borderRadius: topBlockRadius }]}>
         {(() => {
           const currentPrayer = prayersData.find(p => p.id === displayedActiveId) || prayersData[1];
 
@@ -621,7 +621,7 @@ export default function NamazWidget() {
               top: 0, left: 0, right: 0, bottom: 0 
             }, 
             backAnimatedStyle,
-            !isDark && { shadowColor: '#000', shadowOffset: { width: 0, height: s(4) }, shadowOpacity: 0.08, shadowRadius: s(10), elevation: 4, backgroundColor: 'transparent', borderRadius: topBlockRadius }
+            !isDark && { backgroundColor: 'transparent', borderRadius: topBlockRadius }
           ]} 
           pointerEvents={isFlipped ? "auto" : "none"}
         >
@@ -878,17 +878,6 @@ export default function NamazWidget() {
         
         </View>
       </View>
-      
-      <TouchableOpacity 
-        style={[styles.locateBtn, { marginTop: s(24) }]} 
-        onPress={handleLocate}
-        disabled={isLocating}
-      >
-        <MapPin color="#1c1c1e" size={s(20)} strokeWidth={2.5} />
-        <Text style={[styles.locateText, { fontFamily }]}>
-          {isLocating ? 'Орын анықталуда...' : 'Орнымды анықтау'}
-        </Text>
-      </TouchableOpacity>
     </View>
   );
 }

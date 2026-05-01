@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
+import { Home, FlaskConical, LayoutGrid, BarChart2 } from 'lucide-react';
 
 interface BottomNavProps {
-  activeTab: 'home' | 'test' | 'widgets';
-  onTabChange: (tab: 'home' | 'test' | 'widgets') => void;
+  activeTab: 'home' | 'test' | 'widgets' | 'stats';
+  onTabChange: (tab: 'home' | 'test' | 'widgets' | 'stats') => void;
 }
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -11,37 +12,41 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     ? '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif'
     : 'System';
 
+  const navItems = [
+    { id: 'home', title: 'Негізгі', icon: Home },
+    { id: 'test', title: 'Сынақ', icon: FlaskConical },
+    { id: 'stats', title: 'Статистика', icon: BarChart2 },
+    { id: 'widgets', title: 'Виджет', icon: LayoutGrid },
+  ] as const;
+
   return (
     <View style={styles.navContainer}>
-      <TouchableOpacity 
-        style={[styles.navItem, activeTab === 'home' && styles.navItemActive]} 
-        onPress={() => onTabChange('home')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.navText, activeTab === 'home' && styles.navTextActive, { fontFamily }]}>
-          Негізгі
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.navItem, activeTab === 'test' && styles.navItemActive]} 
-        onPress={() => onTabChange('test')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.navText, activeTab === 'test' && styles.navTextActive, { fontFamily }]}>
-          Сынақ
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        style={[styles.navItem, activeTab === 'widgets' && styles.navItemActive]} 
-        onPress={() => onTabChange('widgets')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.navText, activeTab === 'widgets' && styles.navTextActive, { fontFamily }]}>
-          Виджет
-        </Text>
-      </TouchableOpacity>
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = activeTab === item.id;
+        
+        return (
+          <TouchableOpacity 
+            key={item.id}
+            style={styles.navItem} 
+            onPress={() => onTabChange(item.id)}
+            activeOpacity={0.7}
+          >
+            <Icon 
+              color={isActive ? '#1c1c1e' : '#8e8e93'} 
+              size={24} 
+              strokeWidth={isActive ? 2.5 : 2} 
+            />
+            <Text style={[
+              styles.navText, 
+              isActive && styles.navTextActive, 
+              { fontFamily }
+            ]}>
+              {item.title}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -52,25 +57,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e5ea',
-    paddingTop: 16,
-    paddingBottom: 32, // safe area approximation
+    paddingTop: 12,
+    paddingBottom: 28, // safe area approximation
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
-  },
-  navItemActive: {
-    // optional active styling like top border or background tint
+    justifyContent: 'center',
+    gap: 4,
   },
   navText: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '500',
     color: '#8e8e93',
     textAlign: 'center',
-    lineHeight: 20,
   },
   navTextActive: {
     color: '#1c1c1e',
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
