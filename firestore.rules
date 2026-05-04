@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\\\-]+$'); }
+    function isServerTimestamp(field) { return field == request.time; }
+
+    // --- User Profile Validation ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'createdAt'])
+        && data.keys().size() <= 15
+        && data.email is string && data.email.size() <= 256
+        && (data.get('displayName', '') == null || (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256))
+        && (data.get('photoURL', '') == null || (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 1024))
+        && (data.get('isDark', false) is bool)
+        && (data.get('colorMode', 'vibrant') in ['vibrant', 'monochrome', 'minimal'])
+        && (data.get('username', '') is string && data.get('username', '').size() <= 128)
+        && (data.get('usernameLowercase', '') is string && data.get('usernameLowercase', '').size() <= 128)
+        && (data.get('gender', 'none') in ['male', 'female', 'none'])
+        && (data.get('points', 0) is int)
+        && (data.get('streak', 0) is int)
+        && (data.get('lastStreakUpdate', '') is string)
+        && (data.get('isPrivate', false) is bool);
+    }
+
+    function isFriend(uid1, uid2) {
+      let fid = uid1 < uid2 ? uid1 + '_' + uid2 : uid2 + '_' + uid1;
+      return exists(/databases/$(database)/documents/friendships/$(fid)) 
+        && get(/databases/$(database)/documents/friendships/$(fid)).data.status == 'accepted';
+    }
+
+    match /users/{userId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isOwner(userId) 
+        && isValidUser(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if isOwner(userId) 
+        && isValidUser(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().email == existing().email
+        && (existing().get('gender', 'none') == 'none' || incoming().gender == existing().gender)
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'isDark', 'colorMode', 'username', 'usernameLowercase', 'isPrivate', 'gender', 'points', 'streak', 'lastStreakUpdate'])
+        );
+      
+      match /prayers/{date} {
+        allow read: if isSignedIn() && (isOwner(userId) || isFriend(userId, request.auth.uid));
+        allow write: if isOwner(userId);
+      }
+    }
+
+    // --- Friendships Validation ---
+    function isValidFriendship(data) {
+       return data.keys().hasAll(['user1', 'user2', 'status', 'initiatorId', 'createdAt', 'updatedAt'])
+         && data.user1 is string && data.user2 is string
+         && data.status in ['pending', 'accepted']
+         && data.initiatorId == request.auth.uid
+         && data.createdAt == request.time
+         && data.updatedAt == request.time;
+    }
+
+    match /friendships/{friendshipId} {
+       allow list: if isSignedIn() && (resource.data.user1 == request.auth.uid || resource.data.user2 == request.auth.uid);
+       allow get: if isSignedIn() && (resource == null || resource.data.user1 == request.auth.uid || resource.data.user2 == request.auth.uid);
+       allow create: if isSignedIn() 
+         && isValidFriendship(incoming())
+         && (incoming().user1 == request.auth.uid || incoming().user2 == request.auth.uid)
+         // Assuming id is user1_user2 sorted
+         && friendshipId == (incoming().user1 < incoming().user2 ? incoming().user1 + '_' + incoming().user2 : incoming().user2 + '_' + incoming().user1);
+       allow update: if isSignedIn()
+         && (existing().user1 == request.auth.uid || existing().user2 == request.auth.uid)
+         && incoming().user1 == existing().user1
+         && incoming().user2 == existing().user2
+         && incoming().createdAt == existing().createdAt
+         && incoming().updatedAt == request.time
+         && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+       allow delete: if isSignedIn() && (existing().user1 == request.auth.uid || existing().user2 == request.auth.uid);
+    }
+
+    // --- Prayer Record Validation ---
+    function isValidPrayerRecord(data) {
+      return data.keys().hasAll(['userId', 'prayerId', 'date', 'status', 'createdAt'])
+        && data.keys().size() <= 7
+        && data.userId == request.auth.uid
+        && data.prayerId in ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']
+        && data.date is string && data.date.matches('^\\\\d{4}-\\\\d{2}-\\\\d{2}$')
+        && data.status in ['on_time', 'jamaat', 'late', 'qaza']
+        && (data.get('reasons', []).size() <= 10)
+        && data.createdAt == request.time;
+    }
+
+    match /prayerRecords/{recordId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidPrayerRecord(incoming());
+      allow update: if isSignedIn() 
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().date == existing().date
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reasons', 'updatedAt'])
+          && incoming().updatedAt == request.time
+        );
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

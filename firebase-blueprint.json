@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and preferences",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "username": { "type": "string" },
+        "usernameLowercase": { "type": "string" },
+        "isPrivate": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isDark": { "type": "boolean" },
+        "colorMode": { "type": "string", "enum": ["vibrant", "monochrome", "minimal"] },
+        "gender": { "type": "string", "enum": ["male", "female", "none"] },
+        "points": { "type": "integer" },
+        "streak": { "type": "integer" },
+        "lastStreakUpdate": { "type": "string" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "PrayerLog": {
+      "title": "Daily Prayer Log",
+      "description": "Daily completion status for all 5 prayers",
+      "type": "object",
+      "properties": {
+        "fajr": { "type": "boolean" },
+        "dhuhr": { "type": "boolean" },
+        "asr": { "type": "boolean" },
+        "maghrib": { "type": "boolean" },
+        "isha": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Information about a friendship between two users",
+      "type": "object",
+      "properties": {
+        "user1": { "type": "string" },
+        "user2": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "initiatorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user1", "user2", "status", "initiatorId", "createdAt"]
+    },
+    "PrayerRecord": {
+      "title": "Prayer Record",
+      "description": "Information about a specific prayer performance",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "prayerId": { "type": "string", "enum": ["fajr", "dhuhr", "asr", "maghrib", "isha"] },
+        "date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["on_time", "jamaat", "late", "qaza"] },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "prayerId", "date", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profile and settings"
+    },
+    "/users/{userId}/prayers/{date}": {
+      "schema": "PrayerLog",
+      "description": "Stores daily prayer completion for a user"
+    },
+    "/friendships/{friendshipId}": {
+      "schema": "Friendship",
+      "description": "Stores friendship records between two users"
+    },
+    "/prayerRecords/{recordId}": {
+      "schema": "PrayerRecord",
+      "description": "Stores individual prayer performance tracking data"
+    }
+  }
+}

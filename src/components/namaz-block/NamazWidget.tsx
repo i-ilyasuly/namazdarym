@@ -11,10 +11,14 @@ import {
   Animated,
   Easing,
   Pressable,
+  ScrollView,
 } from 'react-native';
-import { Volume2, VolumeX, MapPin } from 'lucide-react';
+import { Volume2, VolumeX, MapPin, Check, ChevronRight, Info, Briefcase, Plane, Thermometer, Moon, ZapOff } from 'lucide-react';
+import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
+import { doc, setDoc, serverTimestamp, getDoc, query, collection, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
 import { EclipseIcon, SunIcon, SunDimIcon, SunsetIcon, MoonStarIcon } from './PrayerIcons';
-import { ThemeContext } from '../../screens/TestScreen';
+import { useAppTheme } from '../../context/ThemeContext';
 
 import { UserIcon } from '../animate-ui/icons/user';
 import { UsersIcon } from '../animate-ui/icons/users';
@@ -243,7 +247,7 @@ const PrayerMiniGraph = React.memo(({ prayerId, color, prayerColor, bgColor }: {
 
 export default function NamazWidget() {
   const { width } = useWindowDimensions(); 
-  const { colorMode, isDark } = useContext(ThemeContext);
+  const { colorMode, isDark } = useAppTheme();
 
   const statusColors = colorMode === 'monochrome' ? MONOCHROME_STATUS_COLORS : VIBRANT_STATUS_COLORS;
   const bgColors = colorMode === 'minimal' ? MINIMAL_BG_COLORS : (colorMode === 'monochrome' ? MONOCHROME_BG_COLORS : VIBRANT_BG_COLORS);
@@ -294,6 +298,63 @@ export default function NamazWidget() {
   const [icon2Color, setIcon2Color] = useState(false);
   const [icon3Color, setIcon3Color] = useState(false);
   const [icon4Color, setIcon4Color] = useState(false);
+
+  const { user, logPrayer, profile } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
+  const [loggedPrayers, setLoggedPrayers] = useState<Record<string, string>>({
+    fajr: 'none',
+    dhuhr: 'none',
+    asr: 'none',
+    maghrib: 'none',
+    isha: 'none',
+  });
+
+  const handleStatusSelect = (status: string) => {
+    const currentPrayer = prayersData.find(p => p.id === displayedActiveId) || prayersData[1];
+    const key = PRAYER_KEYS[displayedActiveId];
+    if (key) {
+      logPrayer(key, status);
+      // Automatically flip back after a short delay to see the selection checkmark/animation
+      setTimeout(() => {
+        handleFlip();
+      }, 600);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    const today = new Date().toISOString().split('T')[0];
+    const prayerDocRef = doc(db, 'users', user.uid, 'prayers', today);
+    const unsub = onSnapshot(prayerDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setLoggedPrayers({
+          fajr: data.fajr || 'none',
+          dhuhr: data.dhuhr || 'none',
+          asr: data.asr || 'none',
+          maghrib: data.maghrib || 'none',
+          isha: data.isha || 'none',
+        });
+      } else {
+        setLoggedPrayers({
+          fajr: 'none',
+          dhuhr: 'none',
+          asr: 'none',
+          maghrib: 'none',
+          isha: 'none',
+        });
+      }
+    });
+    return () => unsub();
+  }, [user]);
+
+  const PRAYER_KEYS: Record<number, string> = {
+    0: 'fajr',
+    1: 'dhuhr',
+    2: 'asr',
+    3: 'maghrib',
+    4: 'isha',
+  };
 
   const handleFlip = () => {
     const toValue = isFlipped ? 0 : 1;
@@ -529,12 +590,37 @@ export default function NamazWidget() {
                   const IconCmp = prayer.Icon;
                   const statusColor = statusColors[prayer.id] || '#f7bc2e';
                   const txtColor = getTextColor(prayer.id);
+                  const key = PRAYER_KEYS[prayer.id];
+                  const currentStatus = loggedPrayers[key] || 'none';
+                  const isRecorded = currentStatus !== 'none';
+
                   return (
                     <View style={{ height: topBlockHeight - (topBlockPaddingY * 2.5) }}>
                       <View style={{ height: topBlockExtraStretch * 1.6 }} />
 
                       <View style={styles.bigSunIcon} pointerEvents="none">
                         <IconCmp color="#f7bc2e" fill="#f7bc2e" size={s(64)} strokeWidth={2} animated={true} />
+                        {isRecorded && (
+                          <motion.div
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            style={{ 
+                              position: 'absolute', 
+                              top: -s(10), 
+                              right: -s(10), 
+                              backgroundColor: '#10b981', 
+                              borderRadius: '50%', 
+                              width: s(24), 
+                              height: s(24),
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                            }}
+                          >
+                            <Check color="#fff" size={s(14)} strokeWidth={3} />
+                          </motion.div>
+                        )}
                       </View>
 
                       <View style={{ position: 'absolute', bottom: s(54), left: 0 }}>
@@ -552,7 +638,14 @@ export default function NamazWidget() {
                       <View style={{ position: 'absolute', bottom: -s(8), left: 0 }}>
                         <TimerDisplay 
                           seconds={timeLeft} 
-                          style={[styles.mainTimeText, { color: txtColor, fontSize: mainTimeFontSize * 0.72, fontFamily }]} 
+                          style={[
+                            styles.mainTimeText, 
+                            { 
+                              color: timeLeft <= 1200 ? '#ef4444' : txtColor, 
+                              fontSize: mainTimeFontSize * 0.72, 
+                              fontFamily 
+                            }
+                          ]} 
                         />
                       </View>
 
@@ -561,22 +654,6 @@ export default function NamazWidget() {
                           <Text style={[styles.cityText, { color: txtColor, fontFamily, fontSize: s(22) * 1.2, transform: [{ translateY: -s(8) }] }]}>{prayer.name}</Text>
                           <View style={{ width: s(8), height: s(8), borderRadius: s(4), backgroundColor: statusColor, marginLeft: s(10), transform: [{ translateY: -s(8) }] }} />
                         </View>
-                      </View>
-
-                      {/* Mini Statistics Graph */}
-                      <View style={{ 
-                        position: 'absolute', 
-                        top: '55%', 
-                        left: '50%', 
-                        transform: [{ translateX: -s(105) }, { translateY: -s(40) }],
-                        opacity: 0.9 
-                      }}>
-                        <PrayerMiniGraph 
-                          prayerId={prayer.id} 
-                          color={txtColor} 
-                          prayerColor={statusColor}
-                          bgColor={bgColors[prayer.id]}
-                        />
                       </View>
 
                       <View style={{ height: (mainTimeFontSize * 0.72) + s(4) }} />
@@ -648,64 +725,102 @@ export default function NamazWidget() {
               onPress={handleFlip}
               style={StyleSheet.absoluteFill} 
             />
-            <View pointerEvents="box-none" style={{ flex: 1, width: '100%', justifyContent: 'flex-start', paddingTop: s(16) }}>
-              <View pointerEvents="box-none" style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%' }}>
-                <UserIcon 
-                  size={s(28)} 
-                  color={icon1Color ? '#3b82f6' : (colorMode === 'vibrant' ? '#1c1c1e' : (isDark ? '#fff' : '#1c1c1e'))} 
-                  onClick={() => setIcon1Color(!icon1Color)} 
-                  containerStyle={{
-                    flexDirection: 'row',
-                    backgroundColor: icon1Color ? 'rgba(59, 130, 246, 0.15)' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'),
-                    borderRadius: s(16),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: s(56),
-                    height: s(56),
-                  }}
-                />
-                <UsersIcon 
-                  size={s(28)} 
-                  color={icon2Color ? '#10b981' : (colorMode === 'vibrant' ? '#1c1c1e' : (isDark ? '#fff' : '#1c1c1e'))} 
-                  onClick={() => setIcon2Color(!icon2Color)}
-                  containerStyle={{
-                    flexDirection: 'row',
-                    backgroundColor: icon2Color ? 'rgba(16, 185, 129, 0.15)' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'),
-                    borderRadius: s(16),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: s(56),
-                    height: s(56),
-                  }}
-                />
-                <TimerIcon 
-                  size={s(28)} 
-                  color={icon3Color ? '#ef4444' : (colorMode === 'vibrant' ? '#1c1c1e' : (isDark ? '#fff' : '#1c1c1e'))} 
-                  onClick={() => setIcon3Color(!icon3Color)}
-                  containerStyle={{
-                    flexDirection: 'row',
-                    backgroundColor: icon3Color ? 'rgba(239, 68, 68, 0.15)' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'),
-                    borderRadius: s(16),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: s(56),
-                    height: s(56),
-                  }}
-                />
-                <XIcon 
-                  size={s(28)} 
-                  color={icon4Color ? (isDark ? '#fff' : '#1c1c1e') : (colorMode === 'vibrant' ? '#1c1c1e' : (isDark ? '#fff' : '#1c1c1e'))} 
-                  onClick={() => setIcon4Color(!icon4Color)}
-                  containerStyle={{
-                    flexDirection: 'row',
-                    backgroundColor: icon4Color ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(28, 28, 30, 0.15)') : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'),
-                    borderRadius: s(16),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: s(56),
-                    height: s(56),
-                  }}
-                />
+            <View pointerEvents="box-none" style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}>
+              {/* Status Icons - 2x2 GRID */}
+              <View style={{ gap: s(24), width: '100%', alignItems: 'center' }}>
+                {/* Row 1 */}
+                <View pointerEvents="box-none" style={{ flexDirection: 'row', justifyContent: 'center', gap: s(36), width: '100%' }}>
+                  <View style={{ alignItems: 'center', gap: s(6) }}>
+                    <TouchableOpacity 
+                      activeOpacity={0.7}
+                      onPress={() => handleStatusSelect('on_time')}
+                      disabled={isSaving}
+                      style={{
+                        backgroundColor: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'on_time' ? '#3b82f6' : (isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.05)'),
+                        borderRadius: s(18),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: s(64),
+                        height: s(64),
+                        borderWidth: 2,
+                        borderColor: '#3b82f6',
+                        elevation: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'on_time' ? 4 : 0,
+                      }}
+                    >
+                      <UserIcon size={s(30)} color={loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'on_time' ? '#fff' : '#3b82f6'} onClick={() => {}} />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: s(11), fontWeight: '700', color: isDark ? '#fff' : '#1c1c1e', fontFamily }}>Уақытылы</Text>
+                  </View>
+
+                  <View style={{ alignItems: 'center', gap: s(6) }}>
+                    <TouchableOpacity 
+                      activeOpacity={0.7}
+                      onPress={() => handleStatusSelect('jamaat')}
+                      disabled={isSaving}
+                      style={{
+                        backgroundColor: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'jamaat' ? '#10b981' : (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.05)'),
+                        borderRadius: s(18),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: s(64),
+                        height: s(64),
+                        borderWidth: 2,
+                        borderColor: '#10b981',
+                        elevation: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'jamaat' ? 4 : 0,
+                      }}
+                    >
+                      <UsersIcon size={s(30)} color={loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'jamaat' ? '#fff' : '#10b981'} onClick={() => {}} />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: s(11), fontWeight: '700', color: isDark ? '#fff' : '#1c1c1e', fontFamily }}>Жамағат</Text>
+                  </View>
+                </View>
+
+                {/* Row 2 */}
+                <View pointerEvents="box-none" style={{ flexDirection: 'row', justifyContent: 'center', gap: s(36), width: '100%' }}>
+                  <View style={{ alignItems: 'center', gap: s(6) }}>
+                    <TouchableOpacity 
+                      activeOpacity={0.7}
+                      onPress={() => handleStatusSelect('late')}
+                      disabled={isSaving}
+                      style={{
+                        backgroundColor: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'late' ? '#ef4444' : (isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.05)'),
+                        borderRadius: s(18),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: s(64),
+                        height: s(64),
+                        borderWidth: 2,
+                        borderColor: '#ef4444',
+                        elevation: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'late' ? 4 : 0,
+                      }}
+                    >
+                      <TimerIcon size={s(30)} color={loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'late' ? '#fff' : '#ef4444'} onClick={() => {}} />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: s(11), fontWeight: '700', color: isDark ? '#fff' : '#1c1c1e', fontFamily }}>Кешіктіру</Text>
+                  </View>
+
+                  <View style={{ alignItems: 'center', gap: s(6) }}>
+                    <TouchableOpacity 
+                      activeOpacity={0.7}
+                      onPress={() => handleStatusSelect('qaza')}
+                      disabled={isSaving}
+                      style={{
+                        backgroundColor: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'qaza' ? (isDark ? '#52525b' : '#1c1c1e') : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(28, 28, 30, 0.05)'),
+                        borderRadius: s(18),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: s(64),
+                        height: s(64),
+                        borderWidth: 2,
+                        borderColor: isDark ? '#a1a1aa' : '#1c1c1e',
+                        elevation: loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'qaza' ? 4 : 0,
+                      }}
+                    >
+                      <XIcon size={s(30)} color={loggedPrayers[PRAYER_KEYS[displayedActiveId]] === 'qaza' ? '#fff' : (isDark ? '#fff' : '#1c1c1e')} onClick={() => {}} />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: s(11), fontWeight: '700', color: isDark ? '#fff' : '#1c1c1e', fontFamily }}>Қаза</Text>
+                  </View>
+                </View>
               </View>
             </View>
           </View>

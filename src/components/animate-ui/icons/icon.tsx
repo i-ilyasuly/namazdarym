@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { useAnimation, AnimationControls } from 'motion/react';
+import { useAnimation } from 'motion/react';
 
 interface AnimateIconContextValue {
-  controls: AnimationControls | 'initial' | 'animate';
+  controls: any;
 }
 
 const AnimateIconContext = React.createContext<AnimateIconContextValue>({
@@ -28,9 +28,18 @@ export function IconWrapper({
   onClick,
   label,
   containerStyle,
+  animate,
   ...props
 }: any) {
   const controls = useAnimation();
+
+  React.useEffect(() => {
+    if (animate === true || animate === 'animate') {
+      controls.start('animate');
+    } else if (animate === false || animate === 'initial' || animate === 'normal') {
+      controls.start('initial');
+    }
+  }, [animate, controls]);
 
   const handleMouseEnter = (e: any) => {
     controls.start('animate');
@@ -43,10 +52,6 @@ export function IconWrapper({
   };
 
   const handleClick = (e: any) => {
-    e.stopPropagation();
-    if (e.nativeEvent && e.nativeEvent.stopImmediatePropagation) {
-      e.nativeEvent.stopImmediatePropagation();
-    }
     controls.start('animate');
     setTimeout(() => {
       controls.start('initial');
@@ -60,7 +65,15 @@ export function IconWrapper({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10, padding: 12, gap: 4, transition: 'background-color 0.3s ease', ...containerStyle }}
+        style={{ 
+          display: 'inline-flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          cursor: 'pointer', 
+          zIndex: 10,
+          ...containerStyle 
+        }}
       >
         <IconComponent {...props} style={{ transition: 'color 0.3s ease', ...(props.style || {}) }} />
         {label && (

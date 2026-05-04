@@ -12,8 +12,13 @@ import {
   Easing,
   Pressable,
 } from 'react-native';
-import { Volume2, VolumeX, MapPin } from 'lucide-react';
+import { Volume2, VolumeX, Check, Users, Clock, AlertCircle, X } from 'lucide-react';
 import { EclipseIcon, SunIcon, SunDimIcon, SunsetIcon, MoonStarIcon } from './PrayerIconsMain';
+import { useAppTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
+
 
 const SC = 0.7; // 30% scale reduction base
 const s = (v: number) => v * SC;
@@ -42,12 +47,60 @@ const STATUS_COLORS: Record<number, string> = {
   4: '#10b981', // green
 };
 
+const MONOCHROME_STATUS_COLORS: Record<number, string> = {
+  0: 'rgba(28, 28, 30, 1.00)', 
+  1: 'rgba(28, 28, 30, 0.75)', 
+  2: 'rgba(28, 28, 30, 0.45)', 
+  3: 'rgba(28, 28, 30, 0.20)', 
+  4: 'rgba(28, 28, 30, 1.00)', 
+};
+
 const BG_COLORS: Record<number, string> = {
-  0: 'rgba(16, 185, 129, 0.1)', // green light
-  1: 'rgba(59, 130, 246, 0.1)', // blue light
-  2: 'rgba(239, 68, 68, 0.1)',  // red light
-  3: 'rgba(28, 28, 30, 0.06)',  // black light
-  4: 'rgba(16, 185, 129, 0.1)', // green light
+  0: 'rgba(16, 185, 129, 0.1)', 
+  1: 'rgba(59, 130, 246, 0.1)', 
+  2: 'rgba(239, 68, 68, 0.1)',  
+  3: 'rgba(28, 28, 30, 0.06)',  
+  4: 'rgba(16, 185, 129, 0.1)', 
+};
+
+const MINIMAL_BG_COLORS: Record<number, string> = {
+  0: '#3f3f46',
+  1: '#3f3f46',
+  2: '#3f3f46',
+  3: '#3f3f46',
+  4: '#3f3f46',
+};
+
+const MONOCHROME_BG_COLORS: Record<number, string> = {
+  0: '#ffffff', 
+  1: '#f1f1f6', 
+  2: '#3f3f46', 
+  3: '#000000', 
+  4: '#ffffff', 
+};
+
+const DARK_MONOCHROME_BG_COLORS: Record<number, string> = {
+  0: '#27272a', 
+  1: '#18181b', 
+  2: '#3f3f46', 
+  3: '#09090b', 
+  4: '#27272a', 
+};
+
+const DARK_MONOCHROME_STATUS_COLORS: Record<number, string> = {
+  0: 'rgba(255, 255, 255, 0.4)', 
+  1: 'rgba(255, 255, 255, 0.3)', 
+  2: 'rgba(255, 255, 255, 0.5)', 
+  3: 'rgba(255, 255, 255, 0.2)', 
+  4: 'rgba(255, 255, 255, 0.4)', 
+};
+
+const PRAYER_KEYS: Record<number, string> = {
+  0: 'fajr',
+  1: 'dhuhr',
+  2: 'asr',
+  3: 'maghrib',
+  4: 'isha',
 };
 
 function ScrollTransition({ 
@@ -122,10 +175,35 @@ function ScrollTransition({
 
 export default function NamazWidgetMain() {
   const { width } = useWindowDimensions(); 
+  const { isDark, colorMode } = useAppTheme();
+  const { user, logPrayer } = useAuth();
   
+  const DARK_BG_COLORS: Record<number, string> = {
+    0: 'rgba(16, 185, 129, 0.15)',
+    1: 'rgba(59, 130, 246, 0.15)',
+    2: 'rgba(239, 68, 68, 0.15)', 
+    3: 'rgba(255, 255, 255, 0.08)',
+    4: 'rgba(16, 185, 129, 0.15)',
+  };
+
+  const statusColors = STATUS_COLORS;
+  const bgColorsSelection = colorMode === 'minimal' 
+    ? (isDark ? MINIMAL_BG_COLORS : BG_COLORS) 
+    : (colorMode === 'monochrome' 
+      ? (isDark ? DARK_MONOCHROME_BG_COLORS : MONOCHROME_BG_COLORS)
+      : (isDark ? DARK_BG_COLORS : BG_COLORS));
+  const bgColors = bgColorsSelection;
+
+  const getTextColor = (id: number) => {
+    if (colorMode === 'monochrome' && (id === 2 || id === 3)) return '#ffffff';
+    if (colorMode === 'minimal') return isDark ? '#ffffff' : '#1c1c1e';
+    if (isDark) return '#ffffff';
+    return '#1c1c1e';
+  };
+
   const [location, setLocation] = useState({ lat: 51.133333, lng: 71.433333 }); // default Astana
   const [isLocating, setIsLocating] = useState(false);
-
+  
   const handleLocate = () => {
     setIsLocating(true);
     if (navigator.geolocation) {
@@ -152,7 +230,106 @@ export default function NamazWidgetMain() {
   const [muteState, setMuteState] = useState<Record<number, boolean>>({});
   const toggleMute = (id: number) => setMuteState(prev => ({ ...prev, [id]: !prev[id] }));
 
+  // Prayer statuses and editing state
+  const [prayerStatuses, setPrayerStatuses] = useState<Record<number, string>>({});
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const prayerDocRef = doc(db, 'users', user.uid, 'prayers', today);
+
+    const unsubscribe = onSnapshot(prayerDocRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setPrayerStatuses({
+          0: data.fajr || 'none',
+          1: data.dhuhr || 'none',
+          2: data.asr || 'none',
+          3: data.maghrib || 'none',
+          4: data.isha || 'none',
+        });
+      } else {
+        setPrayerStatuses({
+          0: 'none',
+          1: 'none',
+          2: 'none',
+          3: 'none',
+          4: 'none',
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const STATUS_OPTIONS = [
+    { 
+      id: 'jamaat', 
+      label: 'Жамағат', 
+      color: '#10b981', 
+      bgColor: colorMode === 'monochrome' ? (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(28, 28, 30, 0.06)') : 'rgba(16, 185, 129, 0.12)', 
+      Icon: Users 
+    },
+    { 
+      id: 'on_time', 
+      label: 'Уақыт', 
+      color: '#3b82f6', 
+      bgColor: colorMode === 'monochrome' ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(28, 28, 30, 0.04)') : 'rgba(59, 130, 246, 0.12)', 
+      Icon: Check 
+    },
+    { 
+      id: 'late', 
+      label: 'Кешікті', 
+      color: '#ef4444', 
+      bgColor: colorMode === 'monochrome' ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(28, 28, 30, 0.02)') : 'rgba(239, 68, 68, 0.12)', 
+      Icon: AlertCircle 
+    },
+    { 
+      id: 'qaza', 
+      label: 'Қаза', 
+      color: isDark ? '#ffffff' : '#1c1c1e', 
+      bgColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(28, 28, 30, 0.08)', 
+      Icon: X 
+    },
+  ];
+
+  const handleStatusSelect = async (prayerId: number, status: string) => {
+    if (!user) return;
+    
+    const prayerKey = PRAYER_KEYS[prayerId];
+    if (prayerKey) {
+      try {
+        await logPrayer(prayerKey, status);
+      } catch (err) {
+        console.error("Error logging prayer:", err);
+      }
+    }
+    setEditingId(null);
+  };
+
+  const getStatusColor = (prayerId: number) => {
+    const status = prayerStatuses[prayerId];
+    if (!status) return statusColors[prayerId] || '#f7bc2e';
+    const opt = STATUS_OPTIONS.find(o => o.id === status);
+    return opt ? opt.color : statusColors[prayerId];
+  };
+
+  const getCellBgColor = (prayerId: number) => {
+    const status = prayerStatuses[prayerId];
+    if (status) {
+      const opt = STATUS_OPTIONS.find(o => o.id === status);
+      if (opt) {
+        if (isDark && status === 'qaza') return 'rgba(255, 255, 255, 0.12)';
+        return opt.bgColor;
+      }
+    }
+    return bgColors[prayerId] || '#f1f1f6';
+  };
+
   const [timeLeft, setTimeLeft] = useState(0);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const pressScales = useRef(DEFAULT_PRAYERS.map(() => new Animated.Value(1))).current;
   const [topDim, setTopDim] = useState({ w: 0, h: 0 });
@@ -163,6 +340,31 @@ export default function NamazWidgetMain() {
   const handlePressOut = (val: Animated.Value) => {
     Animated.spring(val, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }).start();
   };
+
+  // Pulse animation logic
+  useEffect(() => {
+    if (timeLeft <= 1200 && timeLeft > 0) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.3,
+            duration: 800,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+            easing: Easing.inOut(Easing.ease),
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [timeLeft <= 1200, timeLeft > 0]);
 
   useEffect(() => {
     const fetchPrayerTimes = async () => {
@@ -253,6 +455,10 @@ export default function NamazWidgetMain() {
   const gridInnerPaddingX = isMobile ? s(18) : s(22);
   const gridInnerPaddingY = isMobile ? sy(18) : sy(22);
 
+  const cardWidth = (widgetWidth - (widgetInnerPaddingX * 2) - gridGapX) / 2;
+  const cardHeight = cardWidth / 1.4;
+  const topBlockHeight = cardHeight * 2 + gridGapY;
+
   const topBlockExtraStretch = isMobile ? sy(15) : sy(25); 
   const gridVerticalPadding = gridInnerPaddingY * 0.9;
   const smallTimeFontSize = Math.min((widgetWidth / 2) * 0.21, s(44)) * 0.72;
@@ -260,6 +466,7 @@ export default function NamazWidgetMain() {
   const radiusMultiplier = 0.72 * 0.7;
   const outerRadius = s(40) * radiusMultiplier;
   const topBlockRadius = s(28) * radiusMultiplier;
+  const topBlockBottomPadding = topBlockPaddingY * 1.1;
   const gridRectRadius = s(26) * radiusMultiplier;
 
   const topClockAvailWidth = widgetWidth - (widgetInnerPaddingX * 2) - (topBlockPaddingX * 2);
@@ -305,7 +512,9 @@ export default function NamazWidgetMain() {
           paddingHorizontal: widgetInnerPaddingX, 
           paddingVertical: widgetInnerPaddingY,
           width: widgetWidth, 
-          borderRadius: outerRadius 
+          borderRadius: outerRadius,
+          backgroundColor: isDark ? '#2c2c2e' : '#ffffff',
+          shadowOpacity: isDark ? 0.3 : 0.12
         }
       ]}>
       <Animated.View 
@@ -322,15 +531,17 @@ export default function NamazWidgetMain() {
 
           return (
             <Pressable 
+              onPress={() => setEditingId(currentPrayer.id)}
               onPressIn={() => handlePressIn(pressScales[displayedActiveId])}
               onPressOut={() => handlePressOut(pressScales[displayedActiveId])}
               style={[
                 styles.topBlock, 
-                { 
-                  backgroundColor: BG_COLORS[currentPrayer.id] || '#f1f1f6',
-                  paddingHorizontal: topBlockPaddingX,
-                  paddingBottom: topBlockPaddingY * 1.5,
-                  paddingTop: topBlockPaddingY,
+                  { 
+                    backgroundColor: getCellBgColor(currentPrayer.id),
+                    height: topBlockHeight,
+                    paddingHorizontal: topBlockPaddingX,
+                  paddingBottom: topBlockBottomPadding,
+                  paddingTop: topBlockPaddingY * 1.1,
                   borderRadius: topBlockRadius,
                   overflow: 'hidden'
                 }
@@ -341,7 +552,9 @@ export default function NamazWidgetMain() {
                 distance={sy(40)}
                 renderItem={(prayer) => {
                   const IconCmp = prayer.Icon;
-                  const statusColor = STATUS_COLORS[prayer.id] || '#f7bc2e';
+                  const statusColor = getStatusColor(prayer.id);
+                  const txtColor = getTextColor(prayer.id);
+                  
                   return (
                     <View style={{ flex: 1 }}>
                       <View style={{ height: topBlockExtraStretch * 1.6 }} />
@@ -352,44 +565,59 @@ export default function NamazWidgetMain() {
 
                       <View style={styles.cityDateRow}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text style={[styles.cityText, { fontFamily, fontSize: s(22) * 1.2, transform: [{ translateY: -s(8) }] }]}>{prayer.name}</Text>
+                          <Text style={[styles.cityText, { color: txtColor, fontFamily, fontSize: s(22) * 1.2, transform: [{ translateY: -s(8) }] }]}>{prayer.name}</Text>
                           <View style={{ width: s(8), height: s(8), borderRadius: s(4), backgroundColor: statusColor, marginLeft: s(10), transform: [{ translateY: -s(8) }] }} />
                         </View>
                       </View>
 
-                      <View style={{ marginTop: s(20) }}>
-                        <Text style={{ 
-                          fontFamily, 
-                          fontSize: s(24), 
-                          fontWeight: '600', 
-                          color: '#1c1c1e', 
-                          opacity: prayer.id === 0 ? 0.5 : 0 
-                        }}>
-                          Күн:
-                        </Text>
-                        <TimerDisplay 
-                          seconds={timeLeft} 
-                          style={[styles.mainTimeText, { fontSize: mainTimeFontSize, fontFamily, marginTop: s(4) }]} 
-                        />
+                      <View style={{ marginTop: sy(20), flex: 1, justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+                        <Animated.View style={{ opacity: pulseAnim }}>
+                          <TimerDisplay 
+                            seconds={timeLeft} 
+                            style={[styles.mainTimeText, { color: txtColor, fontSize: mainTimeFontSize * 1.0, fontFamily, marginLeft: 0 }]} 
+                          />
+                        </Animated.View>
                       </View>
                     </View>
                   );
                 }}
               />
 
+              {editingId === currentPrayer.id && (
+                <View style={[StyleSheet.absoluteFill, styles.statusOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.92)' }]}>
+                  <View style={styles.statusOptionsRow}>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <TouchableOpacity 
+                        key={opt.id} 
+                        style={styles.statusOptionBtn}
+                        onPress={() => handleStatusSelect(currentPrayer.id, opt.id)}
+                      >
+                        <View style={[styles.statusIconCircle, { backgroundColor: `${opt.color}20` }]}>
+                          <opt.Icon color={opt.color} size={s(28)} />
+                        </View>
+                        <Text style={[styles.statusOptionLabel, { color: isDark ? '#fff' : '#1c1c1e', fontFamily }]}>{opt.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity style={styles.closeStatusBtn} onPress={() => setEditingId(null)}>
+                    <X color={isDark ? '#fff' : '#1c1c1e'} size={s(20)} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <TouchableOpacity
                 style={[styles.bigSoundBtnLight, {
                   position: 'absolute',
-                  bottom: s(16) + (topBlockPaddingY * 0.5),
-                  right: topBlockPaddingX + s(12),
+                  bottom: topBlockBottomPadding,
+                  right: topBlockPaddingX * 0.8,
                 }]}
                 activeOpacity={0.8}
                 onPress={() => toggleMute(currentPrayer.id)}
               >
                 {muteState[currentPrayer.id] ? (
-                  <VolumeX color="#ef4444" size={s(20)} strokeWidth={2.5} />
+                  <VolumeX color="#ef4444" size={s(18)} strokeWidth={2.5} />
                 ) : (
-                  <Volume2 color="#1c1c1e" size={s(20)} strokeWidth={2.5} />
+                  <Volume2 color={getTextColor(currentPrayer.id)} size={s(18)} strokeWidth={2.5} />
                 )}
               </TouchableOpacity>
             </Pressable>
@@ -413,11 +641,12 @@ export default function NamazWidgetMain() {
                 ] 
               }}>
                 <Pressable 
+                  onPress={() => setEditingId(currentPrayer.id)}
                   onPressIn={() => handlePressIn(pressScales[currentPrayer.id])}
                   onPressOut={() => handlePressOut(pressScales[currentPrayer.id])}
                   style={[
                     styles.cardLight, 
-                    { backgroundColor: BG_COLORS[currentPrayer.id] || '#f1f1f6', paddingHorizontal: gridInnerPaddingX, paddingVertical: gridVerticalPadding, borderRadius: gridRectRadius, aspectRatio: 1.4, overflow: 'hidden' }
+                    { backgroundColor: getCellBgColor(currentPrayer.id), paddingHorizontal: gridInnerPaddingX, paddingVertical: gridVerticalPadding, borderRadius: gridRectRadius, aspectRatio: 1.4, overflow: 'hidden' }
                   ]}
                 >
                   <ScrollTransition
@@ -425,19 +654,20 @@ export default function NamazWidgetMain() {
                     distance={sy(30)}
                     renderItem={(prayer) => {
                       const IconCmp = prayer.Icon;
-                      const statusColor = STATUS_COLORS[prayer.id] || "#f7bc2e";
+                      const statusColor = getStatusColor(prayer.id);
+                      const txtColor = getTextColor(prayer.id);
                       return (
                         <View style={{ flex: 1, justifyContent: 'space-between' }}>
                           <View style={styles.cardHeader}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={[styles.cardCityLight, { fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
+                              <Text style={[styles.cardCityLight, { color: txtColor, fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
                               <View style={{ width: s(6), height: s(6), borderRadius: s(3), backgroundColor: statusColor, marginLeft: s(6), transform: [{ translateY: s(1) }] }} />
                             </View>
                             <IconCmp color="#f7bc2e" fill="#f7bc2e" size={s(32)} animated={false} />
                           </View>
                           <View style={{ flex: 1 }} />
                           <View style={styles.cardFooter}>
-                            <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
+                            <Text style={[styles.cardTimeLight, { color: txtColor, fontSize: smallTimeFontSize, fontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
                             <View style={[styles.smallSoundBtnLight, { opacity: 0 }]} pointerEvents="none">
                               <Volume2 size={s(14)} strokeWidth={2.5} />
                             </View>
@@ -462,11 +692,32 @@ export default function NamazWidgetMain() {
                         {muteState[currentPrayer.id] ? (
                           <VolumeX color="#ef4444" size={s(14)} strokeWidth={2.5} />
                         ) : (
-                          <Volume2 color="#1c1c1e" size={s(14)} strokeWidth={2.5} />
+                          <Volume2 color={getTextColor(currentPrayer.id)} size={s(14)} strokeWidth={2.5} />
                         )}
                       </TouchableOpacity>
                     </View>
                   </View>
+
+                  {editingId === currentPrayer.id && (
+                    <View style={[StyleSheet.absoluteFill, styles.statusOverlaySmall, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.92)' }]}>
+                      <View style={styles.statusOptionsGrid}>
+                        {STATUS_OPTIONS.map((opt) => (
+                          <TouchableOpacity 
+                            key={opt.id} 
+                            style={styles.statusOptionBtnSmall}
+                            onPress={() => handleStatusSelect(currentPrayer.id, opt.id)}
+                          >
+                            <View style={[styles.statusIconCircleSmall, { backgroundColor: `${opt.color}20` }]}>
+                              <opt.Icon color={opt.color} size={s(18)} />
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TouchableOpacity style={styles.closeStatusBtnSmall} onPress={() => setEditingId(null)}>
+                        <X color={isDark ? '#fff' : '#1c1c1e'} size={s(14)} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </Pressable>
               </Animated.View>
             );
@@ -485,11 +736,12 @@ export default function NamazWidgetMain() {
                 ] 
               }}>
                 <Pressable 
+                  onPress={() => setEditingId(currentPrayer.id)}
                   onPressIn={() => handlePressIn(pressScales[currentPrayer.id])}
                   onPressOut={() => handlePressOut(pressScales[currentPrayer.id])}
                   style={[
                     styles.cardLight, 
-                    { backgroundColor: BG_COLORS[currentPrayer.id] || '#f1f1f6', paddingHorizontal: gridInnerPaddingX, paddingVertical: gridVerticalPadding, borderRadius: gridRectRadius, aspectRatio: 1.4, overflow: 'hidden' }
+                    { backgroundColor: getCellBgColor(currentPrayer.id), paddingHorizontal: gridInnerPaddingX, paddingVertical: gridVerticalPadding, borderRadius: gridRectRadius, aspectRatio: 1.4, overflow: 'hidden' }
                   ]}
                 >
                   <ScrollTransition
@@ -497,19 +749,20 @@ export default function NamazWidgetMain() {
                     distance={sy(30)}
                     renderItem={(prayer) => {
                       const IconCmp = prayer.Icon;
-                      const statusColor = STATUS_COLORS[prayer.id] || "#f7bc2e";
+                      const statusColor = getStatusColor(prayer.id);
+                      const txtColor = getTextColor(prayer.id);
                       return (
                         <View style={{ flex: 1, justifyContent: 'space-between' }}>
                           <View style={styles.cardHeader}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={[styles.cardCityLight, { fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
+                              <Text style={[styles.cardCityLight, { color: txtColor, fontFamily }]} numberOfLines={1}>{prayer.name}</Text>
                               <View style={{ width: s(6), height: s(6), borderRadius: s(3), backgroundColor: statusColor, marginLeft: s(6), transform: [{ translateY: s(1) }] }} />
                             </View>
                             <IconCmp color="#f7bc2e" fill="#f7bc2e" size={s(32)} animated={false} />
                           </View>
                           <View style={{ flex: 1 }} />
                           <View style={styles.cardFooter}>
-                            <Text style={[styles.cardTimeLight, { fontSize: smallTimeFontSize, fontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
+                            <Text style={[styles.cardTimeLight, { color: txtColor, fontSize: smallTimeFontSize, fontFamily }]} adjustsFontSizeToFit numberOfLines={1}>{prayer.time}</Text>
                             <View style={[styles.smallSoundBtnLight, { opacity: 0 }]} pointerEvents="none">
                               <Volume2 size={s(14)} strokeWidth={2.5} />
                             </View>
@@ -534,11 +787,32 @@ export default function NamazWidgetMain() {
                         {muteState[currentPrayer.id] ? (
                           <VolumeX color="#ef4444" size={s(14)} strokeWidth={2.5} />
                         ) : (
-                          <Volume2 color="#1c1c1e" size={s(14)} strokeWidth={2.5} />
+                          <Volume2 color={getTextColor(currentPrayer.id)} size={s(14)} strokeWidth={2.5} />
                         )}
                       </TouchableOpacity>
                     </View>
                   </View>
+
+                  {editingId === currentPrayer.id && (
+                    <View style={[StyleSheet.absoluteFill, styles.statusOverlaySmall, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.92)' }]}>
+                      <View style={styles.statusOptionsGrid}>
+                        {STATUS_OPTIONS.map((opt) => (
+                          <TouchableOpacity 
+                            key={opt.id} 
+                            style={styles.statusOptionBtnSmall}
+                            onPress={() => handleStatusSelect(currentPrayer.id, opt.id)}
+                          >
+                            <View style={[styles.statusIconCircleSmall, { backgroundColor: `${opt.color}20` }]}>
+                              <opt.Icon color={opt.color} size={s(18)} />
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TouchableOpacity style={styles.closeStatusBtnSmall} onPress={() => setEditingId(null)}>
+                        <X color={isDark ? '#fff' : '#1c1c1e'} size={s(14)} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </Pressable>
               </Animated.View>
             );
@@ -562,6 +836,7 @@ const styles = StyleSheet.create({
   },
   topBlock: {
     position: 'relative',
+    justifyContent: 'center',
   },
   bigSunIcon: {
     position: 'absolute',
@@ -575,7 +850,7 @@ const styles = StyleSheet.create({
     width: s(40) * 1.1,
     height: s(40) * 1.1,
     borderRadius: (s(40) * 1.1) / 2,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -589,7 +864,7 @@ const styles = StyleSheet.create({
     width: s(28),
     height: s(28),
     borderRadius: s(14),
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -665,6 +940,71 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1c1c1e',
     marginLeft: 8,
+  },
+  statusOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  statusOptionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: s(16),
+  },
+  statusOptionBtn: {
+    alignItems: 'center',
+    gap: s(8),
+  },
+  statusIconCircle: {
+    width: s(60),
+    height: s(60),
+    borderRadius: s(30),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusOptionLabel: {
+    fontSize: s(12),
+    fontWeight: '600',
+    opacity: 0.9,
+  },
+  closeStatusBtn: {
+    position: 'absolute',
+    top: s(16),
+    right: s(16),
+    padding: s(10),
+  },
+  statusOverlaySmall: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  statusOptionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: s(12),
+    gap: s(10),
+  },
+  statusOptionBtnSmall: {
+    width: '40%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusIconCircleSmall: {
+    width: s(40),
+    height: s(40),
+    borderRadius: s(20),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeStatusBtnSmall: {
+    position: 'absolute',
+    top: s(8),
+    right: s(8),
+    padding: s(4),
   },
 });
 
