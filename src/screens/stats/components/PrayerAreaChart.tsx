@@ -3,7 +3,7 @@
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { format, subDays } from "date-fns"
 import { kk } from "date-fns/locale"
-import { getPrayerTimeIcon, PRAYER_STATUS_ICONS } from "../lib/prayerIcons";
+import { getPrayerTimeIcon, PRAYER_STATUS_ICONS } from "../../../lib/prayerIcons";
 
 import {
   ChartContainer,
@@ -12,7 +12,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "./ui/chart"
+} from "../../../components/ui/chart"
 
 interface PrayerAreaChartProps {
   data: {

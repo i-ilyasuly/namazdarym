@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, SafeAreaView, View, ActivityIndicator } from 'react-native';
 import HomeScreen from './screens/HomeScreen';
 import QuranScreen from './screens/QuranScreen';
-import StatsScreen from './screens/StatsScreen';
+import StatsScreen from './screens/stats/StatsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import BottomNav from './components/BottomNav';

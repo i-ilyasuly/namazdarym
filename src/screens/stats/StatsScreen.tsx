@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { StatisticsChartsTab } from "../components/StatisticsChartsTab";
-import { PrayerDonutChart } from "../components/PrayerDonutChart";
-import { PrayerPieChart } from "../components/PrayerPieChart";
-import { PrayerBarChart as GithubPrayerBarChart } from "../components/PrayerBarChart";
-import { PrayerLineChart as GithubPrayerLineChart } from "../components/PrayerLineChart";
-import { PrayerAreaChart as GithubPrayerAreaChart } from "../components/PrayerAreaChart";
-import { PrayerRadarChart as GithubPrayerRadarChart } from "../components/PrayerRadarChart";
+import { StatisticsChartsTab } from "./components/StatisticsChartsTab";
+import { PrayerDonutChart } from "./components/PrayerDonutChart";
+import { PrayerPieChart } from "./components/PrayerPieChart";
+import { PrayerBarChart as GithubPrayerBarChart } from "./components/PrayerBarChart";
+import { PrayerLineChart as GithubPrayerLineChart } from "./components/PrayerLineChart";
+import { PrayerAreaChart as GithubPrayerAreaChart } from "./components/PrayerAreaChart";
+import { PrayerRadarChart as GithubPrayerRadarChart } from "./components/PrayerRadarChart";
 import { format, subDays } from "date-fns";
 import {
   View,
@@ -65,10 +65,10 @@ import {
   SunDimIcon,
   SunsetIcon,
   MoonStarIcon,
-} from "../components/namaz-block/PrayerIcons";
-import { useAppTheme } from "../context/ThemeContext";
-import { useAuth } from "../context/AuthContext";
-import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+} from "../../components/namaz-block/PrayerIcons";
+import { useAppTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import { db, handleFirestoreError, OperationType } from "../../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 
 const lineData = [
