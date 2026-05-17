@@ -1,0 +1,162 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users/{userId}/prayer_records
+    // Document ID: YYYY-MM-DD
+    // Fields:
+    //   - uid: string (required, immutable) - The user ID of the owner
+    //   - date: string (required) - The date of the record in YYYY-MM-DD format
+    //   - fajr: string (required) - Status of Fajr prayer ('none', 'prayed', 'delayed', 'missed')
+    //   - dhuhr: string (required) - Status of Dhuhr prayer
+    //   - asr: string (required) - Status of Asr prayer
+    //   - maghrib: string (required) - Status of Maghrib prayer
+    //   - isha: string (required) - Status of Isha prayer
+    //   - updatedAt: timestamp (required) - When the record was last updated
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+    
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
+    function isValidPrayerStatus(status) {
+      return status in ['none', 'prayed', 'congregation', 'delayed', 'missed', 'menstruation'];
+    }
+
+    function isValidPrayerRecord() {
+      let data = request.resource.data;
+      return hasRequiredFields(['uid', 'date', 'updatedAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             isValidDateString(data.date) &&
+             (!('fajr' in data) || isValidPrayerStatus(data.fajr)) &&
+             (!('dhuhr' in data) || isValidPrayerStatus(data.dhuhr)) &&
+             (!('asr' in data) || isValidPrayerStatus(data.asr)) &&
+             (!('maghrib' in data) || isValidPrayerStatus(data.maghrib)) &&
+             (!('isha' in data) || isValidPrayerStatus(data.isha)) &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidUser() {
+      let data = request.resource.data;
+      return hasRequiredFields(['uid', 'updatedAt']) &&
+             data.uid is string && 
+             (!('email' in data) || data.email == null || data.email is string) &&
+             (!('username' in data) || data.username == null || (data.username is string && data.username.size() < 50)) &&
+             (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() < 500)) &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() < 1000)) &&
+             (!('gender' in data) || data.gender == null || (data.gender in ['male', 'female'])) &&
+             (!('lastNI' in data) || data.lastNI == null || (data.lastNI is number)) &&
+             (!('createdAt' in data) || data.createdAt == null || (data.createdAt is timestamp)) &&
+             (!('lastLogin' in data) || data.lastLogin == null || (data.lastLogin is timestamp)) &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidFriendRequest() {
+      let data = request.resource.data;
+      return hasRequiredFields(['senderId', 'receiverId', 'status', 'createdAt', 'updatedAt']) &&
+             data.senderId is string && data.receiverId is string &&
+             data.status in ['pending', 'accepted', 'rejected'] &&
+             data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function isValidFriend() {
+      let data = request.resource.data;
+      return hasRequiredFields(['uid', 'createdAt']) &&
+             data.uid is string && data.createdAt is timestamp;
+    }
+
+    function isValidWallpaper() {
+      let data = request.resource.data;
+      return hasRequiredFields(['id', 'type', 'url']) &&
+             data.id is string && data.id.size() < 100 &&
+             data.type in ['image', 'video', 'stars'] &&
+             data.url is string && data.url.size() < 2000 &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+             (!('category' in data) || (data.category is string && data.category.size() < 100)) &&
+             (!('thumbnail' in data) || (data.thumbnail is string && data.thumbnail.size() < 2000)) &&
+             (!('isPremium' in data) || (data.isPremium is bool));
+    }
+
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.email in ['ilyasuly.isakhan@gmail.com', 'momyn.halal@gmail.com']);
+    }
+
+    match /wallpapers/{wallpaperId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidWallpaper();
+    }
+
+    match /friend_requests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid && isValidFriendRequest();
+      allow update: if isAuthenticated() && resource.data.receiverId == request.auth.uid && isValidFriendRequest();
+      allow delete: if isAuthenticated() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || resource.data.isPrivate == false);
+      allow create: if isOwner(userId) && isValidUser();
+      allow update: if isOwner(userId) && isValidUser();
+
+      match /friends/{friendId} {
+        allow read: if isAuthenticated() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(userId)).data.isPrivate == false);
+        allow write: if isOwner(userId) && isValidFriend();
+      }
+
+      match /prayer_records/{dateString} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidPrayerRecord() && uidUnchanged() && request.resource.data.uid == userId && request.resource.data.date == dateString;
+        allow update: if isOwner(userId) && isValidPrayerRecord() && uidNotModified() && request.resource.data.uid == userId && request.resource.data.date == dateString;
+        allow delete: if isOwner(userId);
+      }
+
+      match /daily_scores/{dateString} {
+        allow read: if isAuthenticated() && (isOwner(userId) || get(/databases/$(database)/documents/users/$(userId)).data.isPrivate == false);
+        allow write: if isOwner(userId);
+      }
+    }
+  }
+}

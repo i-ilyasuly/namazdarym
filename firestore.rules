@@ -16,20 +16,21 @@ service cloud.firestore {
 
     // --- User Profile Validation ---
     function isValidUser(data) {
-      return data.keys().hasAll(['email', 'createdAt'])
-        && data.keys().size() <= 15
+      return data.keys().hasAll(['email'])
+        && data.keys().size() <= 20
         && data.email is string && data.email.size() <= 256
         && (data.get('displayName', '') == null || (data.get('displayName', '') is string && data.get('displayName', '').size() <= 256))
         && (data.get('photoURL', '') == null || (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 1024))
         && (data.get('isDark', false) is bool)
-        && (data.get('colorMode', 'vibrant') in ['vibrant', 'monochrome', 'minimal'])
+        && (data.get('colorMode', 'vibrant') in ['vibrant', 'monochrome', 'minimal', 'default'])
         && (data.get('username', '') is string && data.get('username', '').size() <= 128)
         && (data.get('usernameLowercase', '') is string && data.get('usernameLowercase', '').size() <= 128)
         && (data.get('gender', 'none') in ['male', 'female', 'none'])
         && (data.get('points', 0) is int)
         && (data.get('streak', 0) is int)
         && (data.get('lastStreakUpdate', '') is string)
-        && (data.get('isPrivate', false) is bool);
+        && (data.get('isPrivate', false) is bool)
+        && (data.get('pointsHistory', {}) is map);
     }
 
     function isFriend(uid1, uid2) {
@@ -46,11 +47,11 @@ service cloud.firestore {
         && incoming().createdAt == request.time;
       allow update: if isOwner(userId) 
         && isValidUser(incoming())
-        && incoming().createdAt == existing().createdAt
-        && incoming().email == existing().email
-        && (existing().get('gender', 'none') == 'none' || incoming().gender == existing().gender)
+        && incoming().get('createdAt', null) == existing().get('createdAt', null)
+        && incoming().get('email', '') == existing().get('email', '')
+        && (existing().get('gender', 'none') == 'none' || incoming().get('gender', 'none') == existing().get('gender', 'none'))
         && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'isDark', 'colorMode', 'username', 'usernameLowercase', 'isPrivate', 'gender', 'points', 'streak', 'lastStreakUpdate'])
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'isDark', 'colorMode', 'username', 'usernameLowercase', 'isPrivate', 'gender', 'points', 'streak', 'lastStreakUpdate', 'pointsHistory'])
         );
       
       match /prayers/{date} {

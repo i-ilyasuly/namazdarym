@@ -119,12 +119,12 @@ export default function ProfileScreen() {
 
           {/* Theme Selector */}
           <View style={[styles.settingRow, { alignItems: 'flex-start', paddingTop: 16, paddingBottom: 16 }]}>
-            <View style={[styles.settingIconBg, { backgroundColor: isDark ? '#2c2c2e' : '#f1f1f6' }]}>
-              <Palette color={isDark ? '#fff' : '#1c1c1e'} size={20} />
+            <View style={[styles.settingIconBg, { backgroundColor: isDark ? '#27272a' : '#f4f4f5' }]}>
+              <Palette color={isDark ? '#fafafa' : '#18181b'} size={18} />
             </View>
             <View style={styles.settingLabelContainer}>
-              <Text style={[styles.settingLabel, { fontFamily, color: isDark ? '#fff' : '#1c1c1e' }]}>Сынақ бетінің түстері</Text>
-              <Text style={[styles.settingSub, { fontFamily }]}>Намаз статусының түс тақырыбы</Text>
+              <Text style={[styles.settingLabel, { fontFamily, color: isDark ? '#fafafa' : '#18181b' }]}>Намаз түстері</Text>
+              <Text style={[styles.settingSub, { fontFamily }]}>Беттің көрінісін өзгерту</Text>
               
               <View style={styles.themesContainer}>
                 {themes.map((theme) => (
@@ -133,8 +133,8 @@ export default function ProfileScreen() {
                     style={[
                       styles.themeOption, 
                       colorMode === theme.id && styles.themeOptionActive,
-                      { borderColor: colorMode === theme.id ? '#10b981' : (isDark ? '#2c2c2e' : '#e5e5ea') },
-                      colorMode !== theme.id && isDark && { backgroundColor: '#1c1c1e' }
+                      { borderColor: colorMode === theme.id ? (isDark ? '#fafafa' : '#18181b') : (isDark ? '#27272a' : '#e4e4e7') },
+                      colorMode !== theme.id && isDark && { backgroundColor: '#09090b' }
                     ]}
                     onPress={() => setColorMode(theme.id)}
                     activeOpacity={0.8}
@@ -296,7 +296,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f1f6',
+    backgroundColor: '#fafafa', // modern minimal background
   },
   modalOverlay: {
     flex: 1,
@@ -363,25 +363,22 @@ const styles = StyleSheet.create({
   },
   userCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 8,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e4e4e7',
+    marginBottom: 24,
   },
   avatarContainer: {
-    marginRight: 14,
+    marginRight: 16,
   },
   avatarBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(24, 24, 27, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -389,58 +386,60 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1c1c1e',
-    marginBottom: 2,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#18181b',
+    marginBottom: 4,
   },
   userEmail: {
-    fontSize: 13,
-    color: '#8e8e93',
+    fontSize: 14,
+    color: '#71717a',
   },
   editBtn: {
-    backgroundColor: '#f1f1f6',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    backgroundColor: '#fafafa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e4e4e7',
   },
   editBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1c1c1e',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#18181b',
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#8e8e93',
-    marginBottom: 6,
-    marginLeft: 4,
+    color: '#71717a',
+    marginBottom: 8,
+    marginLeft: 2,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   settingsBlock: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
+    borderRadius: 8,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#e4e4e7',
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   settingIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#f1f1f6',
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: '#fafafa',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#e4e4e7',
   },
   settingLabelContainer: {
     flex: 1,
@@ -448,65 +447,67 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1c1c1e',
+    color: '#18181b',
   },
   settingSub: {
-    fontSize: 12,
-    color: '#8e8e93',
-    marginTop: 1,
+    fontSize: 13,
+    color: '#71717a',
+    marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: '#f1f1f6',
-    marginLeft: 62,
+    backgroundColor: '#e4e4e7',
+    marginLeft: 64,
   },
   themesContainer: {
-    marginTop: 14,
-    gap: 6,
+    marginTop: 16,
+    gap: 8,
   },
   themeOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#e5e5ea',
+    borderColor: '#e4e4e7',
   },
   themeOptionActive: {
-    borderColor: '#10b981',
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    borderColor: '#18181b',
+    backgroundColor: 'rgba(24, 24, 27, 0.03)',
   },
   themeColors: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
   },
   themeDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 4,
   },
   themeName: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#8e8e93',
+    color: '#71717a',
   },
   themeNameActive: {
-    color: '#10b981',
-    fontWeight: '600',
+    color: '#18181b',
+    fontWeight: '500',
   },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 8,
+    gap: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 4,
   },
   logoutText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: '#ef4444',
   },

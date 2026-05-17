@@ -18,7 +18,7 @@ const SC = 0.7; // 30% scale reduction base
 const s = (v: number) => v * SC;
 
 function WeeklyCalendar() {
-  const { isDark } = useAppTheme();
+  const { isDark, colorMode } = useAppTheme();
   const { width } = useWindowDimensions();
   
   // Calculate widget width to match NamazWidgetMain consistency
@@ -43,12 +43,29 @@ function WeeklyCalendar() {
     d.setDate(startOfWeek.getDate() + i);
     weekDays.push({
       date: d.getDate(),
+      fullDate: d,
       isToday: d.toDateString() === today.toDateString(),
+      isFuture: d.getTime() > today.getTime()
     });
   }
 
+  const statusColors = {
+    jamaat: colorMode === "minimal" ? "#10b981" : isDark ? "#ffffff" : "#000000",
+    on_time: colorMode === "minimal" ? "#3b82f6" : isDark ? "#d1d5db" : "#374151",
+    late: colorMode === "minimal" ? "#ef4444" : isDark ? "#9ca3af" : "#6b7280",
+    qaza: isDark ? "#3f3f46" : "#6b7280",
+  };
+
+  const getDayDotColor = (d: Date, isFuture: boolean) => {
+    if (isFuture) return "transparent";
+    const seed = d.getDate() + d.getMonth();
+    if (seed % 4 === 0) return statusColors.jamaat;
+    if (seed % 3 === 0) return statusColors.on_time;
+    if (seed % 2 === 0) return statusColors.late;
+    return statusColors.qaza;
+  };
+
   const todayBorderColor = isDark ? '#fff' : '#1c1c1e';
-  const dotColorForToday = isDark ? '#fff' : '#1c1c1e';
 
   return (
     <View style={[styles.weeklyCalendarContainer, { width: widgetWidth }]}>
@@ -67,7 +84,11 @@ function WeeklyCalendar() {
                 {item.date}
               </Text>
             </View>
-            <View style={[styles.calendarDot, { backgroundColor: item.isToday ? dotColorForToday : (isDark ? '#333' : '#e5e5ea') }]} />
+            <View style={[
+              styles.calendarDot, 
+              { backgroundColor: getDayDotColor(item.fullDate, item.isFuture) },
+              item.isToday && { transform: [{scale: 1.2}] }
+            ]} />
           </View>
         ))}
       </ScrollView>

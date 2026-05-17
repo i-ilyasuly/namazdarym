@@ -1,0 +1,145 @@
+"use client"
+
+import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
+import { getPrayerTimeIcon, PRAYER_STATUS_ICONS } from "../lib/prayerIcons";
+
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "./ui/chart"
+
+interface PrayerStackedBarChartProps {
+  data: {
+    prayer: string
+    prayed: number
+    missed: number
+    congregation: number
+    delayed: number
+    menstruation?: number
+  }[]
+  gender?: string
+}
+
+export function PrayerStackedBarChart({ data, gender }: PrayerStackedBarChartProps) {
+  
+const t = (key: string, options?: any) => {
+  const dict: any = {
+    "status_missed": "Қаза",
+    "status_delayed": "Уақытынан кеш",
+    "status_menstruation": "Үзіліс",
+    "status_congregation": "Жамағатпен",
+    "status_prayed": "Орындалды",
+    "total_performed": "Орындалғаны"
+  };
+  return dict[key] || (options && options.defaultValue) || key;
+};
+
+  const chartConfig = {
+    prayed: {
+      label: t("prayed", { defaultValue: "Уақытында" }),
+      color: gender === "female" ? "#10b981" : "#3b82f6",
+      icon: PRAYER_STATUS_ICONS.prayed,
+    },
+    ...(gender === "male" ? {
+      congregation: {
+        label: t("congregation", { defaultValue: "Жамағатпен" }),
+        color: "#10b981",
+        icon: PRAYER_STATUS_ICONS.congregation,
+      }
+    } : {}),
+    delayed: {
+      label: t("delayed", { defaultValue: "Кешіктіріліп" }),
+      color: "#f43f5e",
+      icon: PRAYER_STATUS_ICONS.delayed,
+    },
+    missed: {
+      label: t("missed", { defaultValue: "Қаза" }),
+      color: "#18181b",
+      icon: PRAYER_STATUS_ICONS.missed,
+    },
+    ...(gender === "female" ? {
+      menstruation: {
+        label: t("menstruation", { defaultValue: "Ерекше күндер" }),
+        color: "#ec4899",
+        icon: PRAYER_STATUS_ICONS.menstruation,
+      }
+    } : {})
+  } satisfies ChartConfig
+
+  return (
+    <div className="w-full bg-transparent">
+      <div className="pb-0">
+        <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[300px] w-full">
+          <BarChart accessibilityLayer data={data} margin={{ top: 20, bottom: 20 }}>
+            <CartesianGrid vertical={false} className="stroke-muted-foreground/10" />
+            <XAxis
+              dataKey="prayer"
+              tickLine={false}
+              tickMargin={12}
+              axisLine={false}
+              tick={({ x, y, payload, index }) => {
+                const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                return (
+                  <g transform={`translate(${Number(x) - 10}, ${Number(y) + 10})`} style={{ pointerEvents: 'none' }}>
+                    <foreignObject width="20" height="20">
+                      <div className="flex items-center justify-center w-full h-full">
+                        {getPrayerTimeIcon(prayers[index] ?? 'default')}
+                      </div>
+                    </foreignObject>
+                  </g>
+                )
+              }}
+            />
+            <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+            <Bar
+              dataKey="prayed"
+              stackId="a"
+              fill="var(--color-prayed)"
+            />
+            {gender === "male" && (
+              <Bar
+                dataKey="congregation"
+                stackId="a"
+                fill="var(--color-congregation)"
+              />
+            )}
+            <Bar
+              dataKey="delayed"
+              stackId="a"
+              fill="var(--color-delayed)"
+            />
+            {gender === "female" && (
+              <Bar
+                dataKey="menstruation"
+                stackId="a"
+                fill="var(--color-menstruation)"
+              />
+            )}
+            <Bar
+              dataKey="missed"
+              stackId="a"
+              fill="var(--color-missed)"
+              radius={[4, 4, 0, 0]}
+            />
+          </BarChart>
+        </ChartContainer>
+
+        <div className="flex flex-wrap items-center justify-center gap-4 mt-4">
+          {Object.entries(chartConfig).map(([key, config]) => {
+            if (key === 'value') return null;
+            const Icon = config.icon;
+            return (
+              <div key={key} className="flex items-center justify-center gap-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                {Icon && <Icon className="h-5 w-5" style={{ color: config.color }} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
